@@ -1,0 +1,828 @@
+// Each #kernel tells which function to compile; you can have many kernels
+
+#pragma kernel InitParticles
+#pragma kernel ClearGrid
+#pragma kernel GridUpdate
+#pragma kernel PartialSums
+#pragma kernel MapParticles
+#pragma kernel NeighborSearch
+#pragma kernel ComputeDensity
+#pragma kernel ComputePressure
+#pragma kernel ComputeForces
+#pragma kernel Update
+#pragma kernel ConnectionKernel
+
+
+
+#include "SPHkernels.cginc"
+#include "SPHUtility.cginc"
+#include "FluidMaths.hlsl"
+
+float pi;
+int NUMTHREADS = 1024;
+
+float3 GRAVITY;
+
+float3 HALF_BOUNDSIZE;
+
+int NUMBER_OF_PARTICLES;
+float PARTICLE_RADIUS;
+
+int CELLOFINTEREST = 0;
+
+float SMOOTHING_RADIUS;
+
+int NUMBEROFCELLS;
+
+int LOWESTCELL;
+int HIGHESTCELL;
+
+float DT;
+
+const float4x4 localToWorld;
+const float4x4 worldToLocal;
+
+
+float STIFFNESS;
+float VISCOSITY;
+
+//Time stepping
+
+float vMax;
+float fMax;
+
+float maxPressure;
+
+
+struct Particle 
+{
+    
+    float3 color;
+    float3 position;
+    float3 velocity;
+    float3 offset;
+    float3 predictedPosition;
+
+    float pressure;
+    float density;
+    float radius;
+    float mass;
+
+    int hash;
+    int index;
+};
+
+struct int36
+{
+    int values [36];
+};
+
+
+struct Connection{
+
+    int p1;
+    int p2;
+};
+
+RWStructuredBuffer<Particle> PARTICLES;
+RWStructuredBuffer<Connection> CONNECTIONS;
+
+RWStructuredBuffer<int> GRID_TRACKER;
+RWStructuredBuffer<int> GRID;
+
+RWStructuredBuffer<int> CELLCOUNT;
+RWStructuredBuffer<int> CELLTRACKER;
+RWStructuredBuffer<int> PARTICLEMAP;
+
+RWStructuredBuffer<int> NEIGHBORCELLS;
+
+RWStructuredBuffer<uint2> SPATIALHASH;
+int36 BBOX_TRIANGLES;
+
+
+
+void ResolveCollisions(float3 position, float3 velocity,uint particleIndex)
+{
+	// Transform position/velocity to the local space of the bounding box (scale not included)
+	float3 posLocal = mul(worldToLocal, float4(position, 1)).xyz;
+	float3 velocityLocal = mul(worldToLocal, float4(velocity, 0)).xyz;
+
+	// Calculate distance from box on each axis (negative values are inside box)
+	float3 halfSize = 0.05;
+    halfSize = mul(worldToLocal,float4(halfSize,1)).xyz;
+
+	const float3 edgeDst = HALF_BOUNDSIZE - abs(position);
+
+    float collisionDamping = 0.15f;
+
+	// Resolve collisions
+	if (edgeDst.x <= 0)
+	{
+		position.x = HALF_BOUNDSIZE.x * sign(position.x);
+		velocity.x *= -1 * collisionDamping;
+	}
+	if (edgeDst.y <= 0)
+	{
+		position.y = HALF_BOUNDSIZE.y * sign(position.y);
+		velocity.y *= -1 * collisionDamping;
+	}
+	if (edgeDst.z <= 0)
+	{
+		position.z = HALF_BOUNDSIZE.z * sign(position.z);
+		velocity.z *= -1 * collisionDamping;
+	}
+
+    
+
+	// Transform resolved position/velocity back to world space
+	PARTICLES[particleIndex].position = position;
+	PARTICLES[particleIndex].velocity = velocity;
+
+}
+
+float3 BoundaryReplusionForce(uint particleIndex, float multiplier)
+{
+	// Transform position/velocity to the local space of the bounding box (scale not included)
+	float3 posLocal = mul(worldToLocal, float4(PARTICLES[particleIndex].position, 1)).xyz;
+	float3 velocityLocal = mul(worldToLocal, float4(PARTICLES[particleIndex].velocity, 0)).xyz;
+
+	// Calculate distance from box on each axis (negative values are inside box)
+	const float3 halfSize = 0.5;
+	const float3 edgeDst = halfSize - abs(posLocal);
+    const float dist = sqrt(dot(edgeDst,edgeDst));
+
+    const float3 dir = normalize(edgeDst);
+
+    float3 forceVector = float3(dir.x * sign(posLocal.x), dir.y * sign(posLocal.y),dir.z * sign(posLocal.z)); 
+
+    if(abs(edgeDst.x<= 0.003) || abs(edgeDst.y<= 0.003) ||abs(edgeDst.z<= 0.003 )) {return multiplier *normalize(edgeDst)*1.0f;}
+
+    else 
+    
+    {
+        return float3(0,0,0);
+    }
+    
+
+	
+
+}
+
+[numthreads(512,1,1)]
+void InitParticles(uint3 id: SV_DispatchThreadID)
+{
+
+    
+    int3 dimensions = GetDimensions(float3(1,1,1),PARTICLE_RADIUS/2.0f);
+
+    int x = floor(id.x/(dimensions.y*dimensions.x));
+    int y = floor((id.x/dimensions.y) % dimensions.z);
+    int z =  floor(id.x % dimensions.z);
+
+    PARTICLES[id.x].radius = PARTICLE_RADIUS;
+    PARTICLES[id.x].mass = ((4*pow(PARTICLE_RADIUS,3)*pi)/(NUMBER_OF_PARTICLES*3))*1000;
+    PARTICLES[id.x].density = 1000;
+
+    
+    PARTICLES[id.x].position = float3(x,y,z)*PARTICLES[id.x].radius*2.0f- HALF_BOUNDSIZE;
+}
+
+
+[numthreads(512,1,1)]
+void ClearGrid(uint3 id: SV_DispatchThreadID)
+{
+    // resets tracker
+    CELLCOUNT[id.x] = 0;
+    CELLTRACKER[id.x] = 0;
+    
+    //CELLCOUNT[id.x] = 0;
+
+}
+
+[numthreads(512,1,1)]
+void GridUpdate (uint3 id: SV_DispatchThreadID)
+{
+
+    if(id.x >= NUMBER_OF_PARTICLES) return;
+    float3 position= NormalizePosition(PARTICLES[id.x].position,HALF_BOUNDSIZE)/(SMOOTHING_RADIUS);
+    uint count = 0;
+
+    int xi = floor(position.x);
+    int yi = floor(position.y);
+    int zi = floor(position.z);
+
+    uint hash = (xi * 92837111) ^ (yi * 689287499) ^ (zi * 2839923481);
+    int h = abs(hash) % (NUMBEROFCELLS);
+
+    //int idCell = GridCellID(position, GetDimensions(HALF_BOUNDSIZE*2,SMOOTHING_RADIUS));
+    int idCell = h;
+   
+    InterlockedAdd(CELLCOUNT[idCell],1u);
+
+    // PARTICLES[id.x].color = float3((PARTICLES[id.x].position.x),
+    //                                (PARTICLES[id.x].position.y),
+    //                                (PARTICLES[id.x].position.z));
+    // if(id.x == 0) {
+    //     PARTICLES[id.x].color = float3(0,0,1);
+    //     PARTICLES[id.x].radius =2*SMOOTHING_RADIUS;
+    //     }
+
+    //     else{ PARTICLES[id.x].color = float3(.3,0,0);}
+
+
+    //if(idCell == CELLOFINTEREST) PARTICLES[id.x].color = float3(0,1,0);
+ 
+ 
+     PARTICLES[id.x].color = float3(0.3,0,0);
+
+    int3 dimensions = GetDimensions(HALF_BOUNDSIZE*2,SMOOTHING_RADIUS);
+
+     int idx = floor(xi * (dimensions.y)*(dimensions.z)) + floor(yi*(dimensions.y)) + zi;
+   
+    PARTICLES[id.x].hash = idCell;
+
+    float3 dims = float3(dimensions.x,dimensions.y,dimensions.z);
+
+    // if(idCell == CELLOFINTEREST) PARTICLES[id.x].color = float3(0,1,0);
+
+    //PARTICLES[id.x].color = float3(xi/dims.x,yi/dims.z,zi/dims.z);
+    PARTICLES[id.x].color = float3(1,0,0);
+    if(id.x == CELLOFINTEREST) PARTICLES[id.x].color = float3(0,0,1);
+
+    PARTICLES[id.x].predictedPosition = PARTICLES[id.x].position + GRAVITY * 1/120.0f;
+    
+}
+
+
+// DOESNT NEED TO BE GPU BASED
+[numthreads(512,1,1)]
+void PartialSums(uint3 id: SV_DispatchThreadID)
+{
+    if(id.x >= NUMBEROFCELLS) return;
+    // calculate partial sums
+    int idx = id.x;
+    int partialSum = 0;
+
+
+    
+    if(idx == 0)
+    {
+    partialSum =CELLCOUNT[idx];
+    }
+
+    else
+    {
+
+        for(int i = 0; i <=idx;i++)
+        {
+            partialSum += CELLCOUNT[idx];
+        }
+    }
+    
+    CELLCOUNT[idx] = partialSum;
+
+
+
+}
+
+[numthreads(512,1,1)]
+void MapParticles (uint3 id: SV_DispatchThreadID, uint3 localID : SV_GroupThreadID, uint3 gID: SV_GroupID)
+{
+
+   
+    if(id.x >= NUMBER_OF_PARTICLES) return; 
+    
+    int h = PARTICLES[id.x].hash;
+
+    int idCell = h;
+    int index = 0;
+    
+    //if(h == CELLOFINTEREST) PARTICLES[id.x].color = float3(0,1,0);
+    
+   
+    InterlockedAdd(CELLTRACKER[idCell],1,index);
+    
+    
+   
+    
+    PARTICLEMAP[CELLCOUNT[idCell] - index] = id.x;
+    //PARTICLES[id.x].density=1974;
+    PARTICLES[id.x].index = CELLCOUNT[idCell] - index;
+    
+    
+    
+    
+    
+
+   
+    
+
+}
+
+[numthreads(64,1,1)]
+void NeighborSearch (uint3 id: SV_DispatchThreadID)
+{
+
+    CELLTRACKER[id.x] = CELLCOUNT[id.x];
+    
+    
+}
+
+[numthreads(512,1,1)]
+void ComputeDensity(uint3 id: SV_DispatchThreadID)
+{
+    // TO DO:
+
+    // array that stores hashes to all neighbor grid cells
+    // separate kernel that initializes just that for each particle
+
+    //density directly looks into that table and loops over the particles in PARTICLEMAP
+ 
+    
+
+    if(id.x >= NUMBER_OF_PARTICLES) return; 
+
+    //PARTICLES[id.x].density = 0;
+
+    // PARTICLES[id.x].velocity += GRAVITY * 0.02f;
+    // PARTICLES[id.x].position += PARTICLES[id.x].velocity * 1/120.0f;
+    
+    // first test only resolve particle collisions, smoothing radius therefore must be equal to size of particle
+    float3 position = NormalizePosition(PARTICLES[id.x].position,HALF_BOUNDSIZE);
+    //int3 cellID = IntCoord(position/SMOOTHING_RADIUS);
+
+    
+    
+
+    
+
+    int idCell = GridCellID(position/SMOOTHING_RADIUS, GetDimensions(HALF_BOUNDSIZE*2,SMOOTHING_RADIUS));
+
+  
+
+    int    indices[27];
+    int i = 0;
+    float sum = 0;
+   
+    int3 dimensions = GetDimensions(HALF_BOUNDSIZE*2,SMOOTHING_RADIUS);
+  
+    bool collision = false;
+
+
+    int3 fakePos = position*10000;
+    int step = SMOOTHING_RADIUS*10000;
+
+     for(int x = fakePos.x-step; x <= fakePos.x+step ;x+=step)
+    {
+        for(int y = fakePos.y - step; y <= fakePos.y+step ;y+=step)
+        {
+             for(int z = fakePos.z - step; z <= fakePos.z+step ;z+=step)
+                {
+                
+                    
+                    float3 rePos = float3(x,y,z)/10000.0f;
+
+                    int3 cellID = IntCoord(rePos/SMOOTHING_RADIUS);
+                //     if(i == 26) break;
+                    int u = cellID.x;
+                    int v = cellID.y;
+                    int w = cellID.z;
+
+
+                    // if(u > dimensions.x || v > dimensions.y || w > dimensions.z || u < 0 || v<0|| z < 0 )
+                    // {
+                    //     indices[i] = -1;
+                    // }
+
+                    u = (sign(u) == -1) ? 0:min(u,dimensions.x);
+                    v = (sign(v) == -1) ? 0:min(v,dimensions.y);
+                    w = (sign(w) == -1) ? 0:min(w,dimensions.z);
+
+
+                //   if(cellID.x<0) u = 0;
+                //   if(cellID.x > dimensions.x) u = dimensions.x-1;
+
+                //    if(cellID.y<0) v = 0;
+                //   if(cellID.y > dimensions.y) v = dimensions.y-1;
+
+                //     if(cellID.z<0) w = 0;
+                //   if(cellID.z > dimensions.z) w = dimensions.z-1;
+
+                  
+            // else{
+
+            //     indices[i] = (floor(u * (dimensions.y) *(dimensions.z)) + floor(v*(dimensions.z)) + w);
+                    
+            // }
+                  
+
+                    
+                    
+
+                      uint hash = (cellID.x * 92837111) ^ (cellID.y * 689287499) ^ (cellID.z * 2839923481);
+                    int h = abs(hash) % NUMBEROFCELLS;
+                    
+                     indices[i] = h;
+                    
+                     //indices[i] = (floor(u * (dimensions.y) *(dimensions.z)) + floor(v*(dimensions.z)) + w);
+                    i++;
+
+
+                }
+        
+        }
+    }
+     
+    //  //okay this loop is where it becomes taxing
+     
+    for(int j = 0; j<27;j++)
+    {
+
+        
+        int nCell = indices[j];
+        if(nCell < 0 ) continue;
+        
+
+          
+        //if(CELLTRACKER[nCell] == 0) continue;
+    	
+        int start = max(0,CELLCOUNT[nCell]-CELLTRACKER[nCell]);
+        //int end = CELLCOUNT[nCell+1];
+
+        
+       
+      
+        
+       
+       
+
+        int lim = min(CELLTRACKER[nCell],150);
+       
+        for(int i = start; i<start+lim;i++)
+        {
+
+            //if(sum >= 1500) break;
+            int pIDX = PARTICLEMAP[i];
+
+            if(pIDX == CELLOFINTEREST && id.x != CELLOFINTEREST) 
+            
+            PARTICLES[id.x].color = (PARTICLES[pIDX].hash == PARTICLES[id.x].hash) ? float3(1,1,0): float3(0,1,1);
+            
+           
+            
+            float3 dir = PARTICLES[id.x].predictedPosition - PARTICLES[pIDX].predictedPosition;
+
+            if(dot(dir,dir) > pow(SMOOTHING_RADIUS,2)) continue;
+            // float  dist = pow(position.x - PARTICLES[pIDX].position.x,2) + pow(position.y - PARTICLES[pIDX].position.y,2) + pow(position.z - PARTICLES[pIDX].position.z,2);
+            float dist = sqrt(dot(dir,dir));
+
+            //  if(pIDX != id.x && dist <=2*PARTICLES[id.x].radius) {
+                
+            //      collision = true;
+
+            //  }
+           
+           
+            if(dist > pow(SMOOTHING_RADIUS,1)) continue;
+            
+           
+
+            //sum +=    WPoly6Kernel_Bindel2011(dist,SMOOTHING_RADIUS,pi);
+            sum += WPoly6Kernel(dist,pow(SMOOTHING_RADIUS,1),pi);
+
+           
+
+          
+             
+            
+           
+           
+        }
+    }
+
+
+        // check wether distance to boundary is smaller than smoothing kernel radius
+        // if it is not:
+        //      determine distance to each wall
+        //      assume particles are equal to current particle
+        //      positioned in a tight layer of 2 along the surface
+        //      loop over all ghost particles within smoothing radius
+        //      add density to overall density
+    
+        
+       //if(collision) PARTICLES[id.x].color = float3(1,1,0);
+     
+       
+       //PARTICLES[id.x].position += PARTICLES[id.x].offset;
+       PARTICLES[id.x].density = sum + 0.0000001;
+       //PARTICLES[id.x].offset.x = sumOfImpulses;
+
+
+       PARTICLES[id.x].pressure = max(STIFFNESS*(PARTICLES[id.x].density - 1000),0);
+       //PARTICLES[id.x].pressure = STIFFNESS*(PARTICLES[id.x].density - 1000);
+
+
+}
+
+[numthreads(512,1,1)]
+void ComputePressure(uint3 id: SV_DispatchThreadID)
+{
+
+    if(id.x >= NUMBER_OF_PARTICLES) return;
+
+    int idx = PARTICLEMAP[id.x];
+
+    if(id.x >= CELLCOUNT[CELLOFINTEREST] - CELLTRACKER[CELLOFINTEREST] && id.x < CELLCOUNT[CELLOFINTEREST]) PARTICLES[idx].color = float3(0,1,0);
+    
+}
+
+[numthreads(512,1,1)]
+void ComputeForces(uint3 id: SV_DispatchThreadID)
+{
+        float3 pressureForce = 0;
+        float3 viscosityForce = 0;
+
+        PARTICLES[id.x].offset = float3(0,0,0);
+
+        float3 position = NormalizePosition(PARTICLES[id.x].position,HALF_BOUNDSIZE);
+        int3 cellID = IntCoord(position/SMOOTHING_RADIUS);
+        int3 dimensions = GetDimensions(HALF_BOUNDSIZE*2,SMOOTHING_RADIUS);
+         int idCell = GridCellID(position/SMOOTHING_RADIUS, GetDimensions(HALF_BOUNDSIZE*2,SMOOTHING_RADIUS));
+
+          //if(idCell == CELLOFINTEREST) PARTICLES[id.x].color = float3(0,1,0);
+
+        // ======= NEIGHBOR INDICES =========
+
+        int    indices[27];
+        int i = 0;
+
+         int3 fakePos = position*10000;
+    int step = SMOOTHING_RADIUS*10000;
+
+     for(int x = fakePos.x-step; x <= fakePos.x+step ;x+=step)
+    {
+        for(int y = fakePos.y - step; y <= fakePos.y+step ;y+=step)
+        {
+             for(int z = fakePos.z - step; z <= fakePos.z+step ;z+=step)
+                {
+                  
+                  
+                  float3 rePos = float3(x,y,z)/10000.0f;
+
+                    int3 cellID = IntCoord(rePos/SMOOTHING_RADIUS);
+                //     if(i == 26) break;
+                    int u = cellID.x;
+                    int v = cellID.y;
+                    int w = cellID.z;
+
+
+                    u = (sign(u) == -1) ? 0:min(u,dimensions.x);
+                    v = (sign(v) == -1) ? 0:min(v,dimensions.y);
+                    w = (sign(w) == -1) ? 0:min(w,dimensions.z);
+
+                    //    if(u > dimensions.x || v > dimensions.y || w > dimensions.z || u < 0 || v<0|| z < 0 )
+                    // {
+                    //     indices[i] = -1;
+                    // }
+
+                //   if(cellID.x<0) u = 0;
+                //   if(cellID.x > dimensions.x) u = dimensions.x;
+
+                //    if(cellID.y<0) v = 0;
+                //   if(cellID.y > dimensions.y) v = dimensions.y;
+
+                //    if(cellID.z<0) w = 0;
+                //   if(cellID.z > dimensions.z) w = dimensions.z;
+
+                  
+
+
+                    
+              
+
+            //  else{
+            //       indices[i] = (floor(u * (dimensions.y) *(dimensions.z)) + floor(v*(dimensions.z)) + w);
+
+            //  }
+            
+              
+
+                
+                    uint hash = (cellID.x * 92837111) ^ (cellID.y * 689287499) ^ (cellID.z * 2839923481);
+                    int h = abs(hash) % NUMBEROFCELLS;
+                    indices[i] = h;
+              
+                    //indices[i] = (floor(u * (dimensions.y) *(dimensions.z)) + floor(v*(dimensions.z)) + w);
+                    i++;
+
+                }
+        
+        }
+    }
+
+
+
+          for(int j = 0; j<27;j++)
+    {
+
+        
+        int nCell = indices[j];
+        if(nCell < 0) {
+            
+            
+            //PARTICLES[id.x].color = float3(0,1,1);
+            continue;}
+        
+        // if(nCell== CELLOFINTEREST && idCell!= CELLOFINTEREST) {
+            
+        //     PARTICLES[id.x].color = float3(0,0,1);
+        //     }
+
+        
+    	//if(CELLTRACKER[nCell] == 0) continue;
+        int start = CELLCOUNT[nCell] - CELLTRACKER[nCell];
+        //int end = CELLCOUNT[nCell];
+
+        
+       
+        
+       
+       
+
+        int lim = min((CELLTRACKER[nCell]),150);
+        for(int i = start; i<start+lim;i++)
+        {
+            
+            uint pIDX = PARTICLEMAP[i];
+
+            
+        
+            if(pIDX == id.x ) 
+            
+            {
+
+                
+               
+                continue;
+
+            }
+            
+          
+            
+
+
+           float3 dir   = PARTICLES[id.x].predictedPosition - PARTICLES[pIDX].predictedPosition ;
+            if(dot(dir,dir) > pow(SMOOTHING_RADIUS,2)) continue;
+            float3 edgeDistance = HALF_BOUNDSIZE - abs(PARTICLES[id.x].position.x);
+
+            dir = (sqrt(dot(dir,dir)) > 0) ? dir: float3(0,0.01f,0);
+           float  dist  = sqrt(dot(dir,dir));
+           if(dist > pow(SMOOTHING_RADIUS,2)) continue;
+
+
+           float3 dirNormalized = dir/dist;
+
+           float pressureMean =  (PARTICLES[id.x].pressure + PARTICLES[pIDX].pressure)/2.0f;
+
+
+           pressureForce    += (PARTICLES[pIDX].mass/PARTICLES[pIDX].density) * pressureMean * SpikeyKernelFirstDerivative(dist, pow(SMOOTHING_RADIUS,1),pi) * dirNormalized;
+           viscosityForce   += (PARTICLES[pIDX].velocity - PARTICLES[id.x].velocity) * WPoly6Kernel(dist,pow(SMOOTHING_RADIUS,1),pi);
+
+           
+
+
+
+
+
+
+        }
+
+    }
+
+        //if(length(pressureForce) > maxPressure) {pressureForce = float3(0,0,0);}
+        
+
+
+
+
+        PARTICLES[id.x].offset =  -(pressureForce/PARTICLES[id.x].density) + VISCOSITY*viscosityForce;
+
+        if(length(PARTICLES[id.x].offset) > fMax) fMax = length(PARTICLES[id.x].offset);
+       
+
+        
+
+
+}
+
+[numthreads(512,1,1)]
+void Update (uint3 id : SV_DispatchThreadID)
+{
+    // TODO: insert actual code here!
+    if(id.x >= NUMBER_OF_PARTICLES) return; 
+    
+    
+   
+    float3 position = PARTICLES[id.x].position;
+    float radius = PARTICLES[id.x].radius ; 
+
+    float3 velocity = PARTICLES[id.x].velocity;
+    // if(abs(length(velocity)) > 500)
+    // {
+
+    //     PARTICLES[id.x].radius = 0.09f;
+    //     return;
+    // }
+
+    // if(isnan(position.x) || isnan(position.y) || isnan(position.z))
+    // {
+
+    //     PARTICLES[id.x].radius = 0.09f;
+    //     return;
+    // }
+
+    float3 oobCheck = HALF_BOUNDSIZE - abs(position);
+
+    // if(abs(length(position))> length(HALF_BOUNDSIZE))
+    // {
+    //     PARTICLES[id.x].radius = 0.02f;
+    // }
+
+  
+
+ 
+   
+
+    if(length(PARTICLES[id.x].velocity) > vMax) vMax = length(PARTICLES[id.x].velocity);
+   
+
+      float cfl = 0.004*(SMOOTHING_RADIUS/sqrt(STIFFNESS));
+      float dTF = 0.00025*sqrt(SMOOTHING_RADIUS/fMax);
+
+    // float timestep = min(cfl,dTF);
+    // timestep = min(DT/2.0f,timestep);
+    //float timestep = 0.002f;
+    float timestep = 0.001f;
+   
+    float3 pressureForce =  (PARTICLES[id.x].offset)*timestep;
+
+    // float3 positiveX = position + velocity*timestep + 0.5f*pressureForce;
+    // float3 negativeX = position - velocity*timestep +0.5f*pressureForce;
+
+    // velocity = (positiveX - negativeX)/2*timestep;
+
+    // position = -positiveX + 2*position + pressureForce + pow(timestep,3);
+    
+     
+
+     for(int i = 0; i<100; i++)
+     {
+
+     
+     velocity = velocity +pressureForce + GRAVITY/1.0f*timestep ;
+     position = PARTICLES[id.x].position + velocity * timestep;
+    
+    
+
+     
+     }
+     ResolveCollisions(position,velocity,id.x);
+    
+
+   
+
+   
+    
+}
+
+
+    [numthreads(8,1,1)]
+void ConnectionKernel (uint3 id : SV_DispatchThreadID)
+{
+
+   
+    Connection con = CONNECTIONS[id.x];
+    
+    float3 dir = PARTICLES[con.p1].position - PARTICLES[con.p1].position;
+    float len = length(dir);
+
+   
+        Particle pt = PARTICLES[con.p2];
+        float3 dir_n = dir/len;
+
+        float3 force = -0.002 * len *  dir +  0.02 * pt.velocity;
+
+
+        PARTICLES[con.p2].velocity += force * 0.02;
+        PARTICLES[con.p2].position += PARTICLES[con.p2].velocity * 0.02;
+        LOWESTCELL = 1400000;
+
+       
+    
+    
+    
+    
+
+}
+
+

@@ -39,7 +39,7 @@ As of 2024 new approaches exist, many based on SPH but with improvements to the 
  <li> A bunch of particles</li>
  </ol>
 
- <img src="/images/grid_comp_comp.png">
+ <img src="/images/grid_comp.png">
 
  The <i>domain</i> keeps the particles bounded and is divided into a set of grid cells. This is important to reduce the number of particles the algorithm has to compare during density estimation.
 

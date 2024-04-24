@@ -13,6 +13,8 @@ One simple observable locomotive behaviour in relation to the viscosity of the e
 Both can be distinguished through the wavelengths of the body curvature traversing the body, as well as the beating frequency.
 
 <img src="/images/crawling_loop0001-0025.gif">
+<img src="/images/swimming_loop0001-0025.gif">
+
 
  </p>
 

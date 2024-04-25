@@ -38,14 +38,23 @@ As of 2024 new approaches exist, many based on SPH but with improvements to the 
  <li> A domain or grid</li>
  <li> A bunch of particles</li>
  </ol>
-
+<div style="padding: 1rem; margin:1rem">
  <img src="/images/grid_comp.png">
+ </div>
 
  The <i>domain</i> keeps the particles bounded and is divided into a set of grid cells. This is important to reduce the number of particles the algorithm has to compare during density estimation.
 
- The <i>density</i> is measured by iterating over all the neighbouring particles within a Smoothing Radius, and summing up their local densities multiplied with a weighting factor depending on the distance to the particle of interest.
+ The <i>density</i> is measured by iterating over all the neighbouring particles within a Smoothing Radius (equal to the grid cell size) and summing up their local densities multiplied with a weighting factor depending on the distance to the particle of interest.
  
- For density estimation as well as the calculation of the pressure and viscous forces different <i> Smoothing Kernels</i> or their derivatives are applied. </p>
+ For density estimation as well as the calculation of the pressure and viscous forces different <i> Smoothing Kernels</i> or their derivatives are applied. 
+ 
+ One advantage of particle-based fluid simulation methods is, that they allow for parallel processing on the GPU. So instead of processing each particle in sequence (and you can get quite high numbers of particles in your simulation), you can process them in parallel simulataneously.
+
+ Not surprisingly is the GPU or <i>Graphics Processing Unit</i> an integral part to computer graphics and is responsible for most of the things you see on your screen. If you want to see a green orb on screen, you take your geometric information (vertices and edges), describing the sphere and then you pass it to a <i>Shader</i>-script, describing <i>how</i> the Sphere should look like. Shaders most commonly use the GPU, where each pixel on the screen is processed in parallel.
+
+ In Unity we can use that to move our particle simulation to the GPU as well, a so-called <i>Compute Shader</i>
+ </p>
+
 
  ## Results thus far
 

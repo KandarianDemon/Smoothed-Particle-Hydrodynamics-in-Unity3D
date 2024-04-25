@@ -29,7 +29,9 @@ Luckily, the nervous system has been mapped and studied for a long time, and sin
 
 These leads to many exciting question to be asked in neurobiology, information science and even philosophy, but in light of increasingly powerful computers we're asking: Is it possible to simulate this system? Can we combine a virtual environment with a virtual body and a virtual nervous system? What could such a model tell us about the real deal? How reduced can and must such a virtual system be to still accurately capture real behaviour? Can this be turned into a tool to be used in close conjunction with <i>C. Elegans</i> experimentalists to aid prediction and generate new hypotheses?
 
-Of course, over the past decades other researchers have wondered about this (eg. openworm.org or the <i>Si. Elegans</i>, roboticists etc.) and came up with very fascinating work.
+Of course, over the past decades other researchers have wondered about this (eg. openworm.org or the <i>Si. Elegans</i>, roboticists etc.) and came up with very fascinating work. Yet the availability of powerful hardware and software for app and graphics development, as well as an abundance of learning resources for these tools gives access to computational methods to a greater audience, increasing the pool of people who can bring their knowledge and curiosity together to work on these problems.
+
+So anyone who is still reading and curious, in the name of open science, feel free to collaborate or send me a message :-)
 
 ## The Matrix for Worms
 
@@ -45,7 +47,7 @@ Both can be distinguished through the wavelengths of the body curvature traversi
 
  </p>
 
- 
+
 
   ## Applications of SPH
 
@@ -90,7 +92,7 @@ As of 2024 new approaches exist of course, many based on SPH but with improvemen
 
  ## Results thus far
 
- <p align="justify"> Currently we managed a basic interactive implementation of the SPH algorithm in Unity3D using ComputeShaders and GPU processing. It is still a little buggy, yet the domain can be moved, rotated, squished or made larger with the fluid behaving accordingly.
+ <p align="justify"> Currently we got a basic interactive implementation of the SPH algorithm to run in Unity3D using ComputeShaders and GPU processing. It is still a little buggy, yet the domain can be moved, rotated, squished or made larger with the fluid behaving accordingly.
  
  In the following images you can see it in action. The animations you see are not pre-rendered but captured in real-time on a Windows PC and a Nvidia GeForce RTX 2080 GPU</p>
  

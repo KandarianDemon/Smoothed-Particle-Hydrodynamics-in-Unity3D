@@ -50,7 +50,8 @@ Both can be distinguished through the wavelengths of the body curvature traversi
  </p>
 
 </div>
-  ## Applications of SPH
+
+## Applications of SPH
 
  <div align="justify">
  <p align="justify"> Originally developed to simulate processes in Astrophysics in the 1970s it gained popularity in computer graphics as a means to simulate the behaviour of fluids. It has been especially popular in the film, vfx and video game industries, as it enables the simulation of fluid behaviour in real-time.
@@ -66,7 +67,9 @@ As of 2024 new approaches exist of course, many based on SPH but with improvemen
 
  In each timestep of the simulation, each particles position is updated, by calculating estimating the density at the particles location and thus deriving the pressure. Then pressure forces and viscous forces acting on the particle are used to calculate the change in velocity, which then determines the new position at the next timestep. </p>
 
+<div align="center">
  <img src="images/simulation_simplified.PNG"/>
+ </div>
 
  So, for an SPH simulation as you can find it here, one needs two things:
 

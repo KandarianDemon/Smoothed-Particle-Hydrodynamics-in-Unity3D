@@ -60,6 +60,10 @@ As of 2024 new approaches exist, many based on SPH but with improvements to the 
 
  <p align="justify"> Currently we managed a basic interactive implementation of the SPH algorithm in Unity3D using ComputeShaders and GPU processing. It is still a little buggy, yet the domain can be moved, rotated, squished or made larger with the fluid behaving accordingly.</p>
 
+ <img src="/images/sph_1-ezgif.com-video-to-gif-converter.gif">
+ <img src="/images/sph_2-ezgif.com-video-to-gif-converter.gif">
+ <img src="/images/sph_3-ezgif.com-video-to-gif-converter.gif">
+
  ## Further Reading
  
 

@@ -2,8 +2,36 @@
 
 > Water can flow or it can crash. Be water, my friend - Bruce Lee
 
-## Virtual _C. Elegans_ models 
-<p align = "justify">This repository is part of a project aiming to build an interactive biophysical simulation of _C. elegans_ and its locomotion behaviour.
+<p align = "justify">This repository is part of a project aiming to build an interactive biophysical simulation of <i>C. Elegans</i> and its locomotion behaviour. And especially, it's a great sandbox to unite my passion for neurobiology, biophysics, computer graphics and film :-). <br>
+
+Here we toyed around with a lagrangian, particle-based simulation technique for fluids, which at some point should represent the liquid environment a virtual worm inhabits.
+
+## Table of Contents
+
+<ol>
+<li>Virtual C. Elegans models</li>
+<li>Applications of Smoothed Particle Hydrodynamics
+<li>Introduction to SPH
+<li>Implementation overview
+<li>Results
+<li> Further reading and sources
+<li> Further resources
+</ol>
+
+## On C. Elegans
+
+
+<i>C. Elegans</i> is tiny. At about 1mm in length, 80 micrometers in diameter it lives its microscopic life in the moist environment rotting fruit or the soil. It is especially interesting to biologists, due to its constant cell size of 959 somatic cells, 300 of which comprise its nervous system, and 95 of which being the body wall muscles relevant for locomotion.<br>
+
+These 300 neurons are capable of integrating sensory information from the exterior and interior and decide on which action our tiny worm will take, given the situation he finds himself in. 300 neurons, unlike the 86 000 000 000 neurons in humans, is a tiny number, still comprehensible to human minds. But despite this "reduced" nervous system <i>C. elegans</i> is capable of various behavioural programmes, which makes an interesting organism to study how a nervous system integrates information and decides on locomotor action.
+
+Luckily, the nervous system has been mapped and studied for a long time, and since 1986 (see J, White; et al 1986) a map of all the neuronal connection is present. Of course, that sounds simpler than it actually is, but the point is that <i> Caenorhabditis Elegans</i> is the first and only animal of which a <b>full connectome </b> exists, and where it is comparatively feasible to study the connectome in detail. 
+
+These leads to many exciting question to be asked in neurobiology, information science and even philosophy, but in light of increasingly powerful computers we're asking: Is it possible to simulate this system? Can we combine a virtual environment with a virtual body and a virtual nervous system? What could such a model tell us about the real deal? How reduced can and must such a virtual system be to still accurately capture real behaviour? Can this be turned into a tool to be used in close conjunction with <i>C. Elegans</i> experimentalists to aid prediction and generate new hypotheses?
+
+Of course, over the past decades other researchers have wondered about this (eg. openworm.org or the <i>Si. Elegans</i>, roboticists etc.) and came up with very fascinating work.
+
+## The Matrix for Worms
 
 As locomotive behaviour requires sensing the environment as well as interior states of the worms body we're trying to combine a simplified biophysical model of the worms body, e.g. a mass-spring-model with a particle-based simulation of its surrounding environment.
 
@@ -16,6 +44,8 @@ Both can be distinguished through the wavelengths of the body curvature traversi
 
 
  </p>
+
+ 
 
   ## Applications of SPH
 
@@ -69,6 +99,8 @@ As of 2024 new approaches exist of course, many based on SPH but with improvemen
  <img src="/images/sph_2-ezgif.com-video-to-gif-converter.gif"/>
  <img src="/images/sph_3-ezgif.com-video-to-gif-converter.gif"/>
  </p>
+
+ <p> In future, we'd like to add physical bodies interacting with the fluid, namely a mass-spring-representation of a worms' body, like in previous works by Palyanov et. al (2012), but adapted to an interactive environment </p>
 
  ## Further Reading
  

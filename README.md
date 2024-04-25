@@ -20,21 +20,23 @@ Here we toyed around with a lagrangian, particle-based simulation technique for 
 
 ## On C. Elegans
 
-
+<div align="justify">
 <i>C. Elegans</i> is tiny. At about 1mm in length, 80 micrometers in diameter it lives its microscopic life in the moist environment rotting fruit or the soil. It is especially interesting to biologists, due to its constant cell size of 959 somatic cells, 300 of which comprise its nervous system, and 95 of which being the body wall muscles relevant for locomotion.<br>
 
 These 300 neurons are capable of integrating sensory information from the exterior and interior and decide on which action our tiny worm will take, given the situation he finds himself in. 300 neurons, unlike the 86 000 000 000 neurons in humans, is a tiny number, still comprehensible to human minds. But despite this "reduced" nervous system <i>C. elegans</i> is capable of various behavioural programmes, which makes an interesting organism to study how a nervous system integrates information and decides on locomotor action.
 
-Luckily, the nervous system has been mapped and studied for a long time, and since 1986 (see J, White; et al 1986) a map of all the neuronal connection is present. Of course, that sounds simpler than it actually is, but the point is that <i> Caenorhabditis Elegans</i> is the first and only animal of which a <b>full connectome </b> exists, and where it is comparatively feasible to study the connectome in detail. 
+Luckily, the nervous system has been mapped and studied for a long time, and since 1986 (see J, White; et al 1986) a map of all the neuronal connections is present. Of course, that sounds simpler than it actually is, but the point is that <i> Caenorhabditis Elegans</i> is the first and only animal of which a <b>full connectome </b> exists, and where it is comparatively feasible to study the connectome in detail. 
 
 These leads to many exciting question to be asked in neurobiology, information science and even philosophy, but in light of increasingly powerful computers we're asking: Is it possible to simulate this system? Can we combine a virtual environment with a virtual body and a virtual nervous system? What could such a model tell us about the real deal? How reduced can and must such a virtual system be to still accurately capture real behaviour? Can this be turned into a tool to be used in close conjunction with <i>C. Elegans</i> experimentalists to aid prediction and generate new hypotheses?
 
 Of course, over the past decades other researchers have wondered about this (eg. openworm.org or the <i>Si. Elegans</i>, roboticists etc.) and came up with very fascinating work. Yet the availability of powerful hardware and software for app and graphics development, as well as an abundance of learning resources for these tools gives access to computational methods to a greater audience, increasing the pool of people who can bring their knowledge and curiosity together to work on these problems.
 
 So anyone who is still reading and curious, in the name of open science, feel free to collaborate or send me a message :-)
+</div>
 
 ## The Matrix for Worms
 
+<div align="justify">
 As locomotive behaviour requires sensing the environment as well as interior states of the worms body we're trying to combine a simplified biophysical model of the worms body, e.g. a mass-spring-model with a particle-based simulation of its surrounding environment.
 
 One simple observable locomotive behaviour in relation to the viscosity of the environment is forward and backwards locomotion. In viscous environments, like agar, the characteristic crawling motion pattern can be observed, whereas in less viscous environments, like water, swimming motions are displayed.
@@ -47,10 +49,10 @@ Both can be distinguished through the wavelengths of the body curvature traversi
 
  </p>
 
-
-
+</div>
   ## Applications of SPH
 
+ <div align="justify">
  <p align="justify"> Originally developed to simulate processes in Astrophysics in the 1970s it gained popularity in computer graphics as a means to simulate the behaviour of fluids. It has been especially popular in the film, vfx and video game industries, as it enables the simulation of fluid behaviour in real-time.
  
  If you've seen <i>The Return of the King</i> you may remember Gollum drowning in a sea of lava after following the One ring to its doom. That lava simulation is based on the SPH algorithm.
@@ -89,8 +91,10 @@ As of 2024 new approaches exist of course, many based on SPH but with improvemen
  In Unity we can use that to move our particle simulation to the GPU as well, a so-called <i>Compute Shader</i>
  </p>
 
-
+ </div>
  ## Results thus far
+
+ <div align="justify">
 
  <p align="justify"> Currently we got a basic interactive implementation of the SPH algorithm to run in Unity3D using ComputeShaders and GPU processing. It is still a little buggy, yet the domain can be moved, rotated, squished or made larger with the fluid behaving accordingly.
  
@@ -103,6 +107,7 @@ As of 2024 new approaches exist of course, many based on SPH but with improvemen
  </p>
 
  <p> In future, we'd like to add physical bodies interacting with the fluid, namely a mass-spring-representation of a worms' body, like in previous works by Palyanov et. al (2012), but adapted to an interactive environment </p>
+ </div>
 
  ## Further Reading
  

@@ -2,14 +2,14 @@
 
 > Water can flow or it can crash. Be water, my friend - Bruce Lee
 
-<p align = "justify">This repository is part of a project aiming to build an interactive biophysical simulation of <i>C. Elegans</i> and its locomotion behaviour. And especially, it's a great sandbox to unite my passion for neurobiology, biophysics, computer graphics and film :-). <br>
+<p align = "justify">This repository is part of a project aiming to build an interactive biophysical simulation of <i>C. Elegans</i> and its locomotion behaviour. And especially, it's a great sandbox to unite a passion for neurobiology, biophysics, computer graphics and film :-). <br>
 
 Here we toyed around with a lagrangian, particle-based simulation technique for fluids, which at some point should represent the liquid environment a virtual worm inhabits.
 
 ## Table of Contents
 
 <ol>
-<li>Virtual C. Elegans models</li>
+<li>C. Elegans Connectomics</li>
 <li>Applications of Smoothed Particle Hydrodynamics
 <li>Introduction to SPH
 <li>Implementation overview
@@ -18,7 +18,7 @@ Here we toyed around with a lagrangian, particle-based simulation technique for 
 <li> Further resources
 </ol>
 
-## On C. Elegans
+## C. Elegans connectomics
 
 <div align="justify">
 <i>C. Elegans</i> is tiny. At about 1mm in length, 80 micrometers in diameter it lives its microscopic life in the moist environment rotting fruit or the soil. It is especially interesting to biologists, due to its constant cell size of 959 somatic cells, 300 of which comprise its nervous system, and 95 of which being the body wall muscles relevant for locomotion.<br>
@@ -95,7 +95,20 @@ As of 2024 new approaches exist of course, many based on SPH but with improvemen
  </p>
 
  </div>
- ## Results thus far
+
+ ## Implementation
+
+  <div align="justify">
+  <ul>
+  <li> Shaders (Billboard shader to render particles, particle shader and material)
+  <li> Compute Shader Handling (Initialization and dispatch during update loop)
+  <li> Particle system (simulation parameters, initialization of particles and SPH settings)
+  <li> Compute Shader (SPH algorithm, in parallel for each particle, GPU)
+  <li> GLLines, uses GLLines library to draw the bounding box in-game.
+  </ul>
+  </div>
+
+ ## Results
 
  <div align="justify">
 

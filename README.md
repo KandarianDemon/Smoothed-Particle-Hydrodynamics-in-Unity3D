@@ -23,7 +23,7 @@ Both can be distinguished through the wavelengths of the body curvature traversi
  
  If you've seen <i>The Return of the King</i> you may remember Gollum drowning in a sea of lava after following the One ring to its doom. That lava simulation is based on the SPH algorithm.
 
-As of 2024 new approaches exist, many based on SPH but with improvements to the original algorithm, leading to more accurate and stable simulations results. However, to get into interactive fluid simulations we thought it a good idea to start with the basics to get familiar with some of the concepts. </p>
+As of 2024 new approaches exist of course, many based on SPH but with improvements to the original algorithm, leading to more accurate and stable simulation results. However, to get into interactive fluid simulations we thought it a good idea to start with the basics to get familiar with some of the concepts. </p>
 
  ## A brief introduction to SPH
 
@@ -32,6 +32,8 @@ As of 2024 new approaches exist, many based on SPH but with improvements to the 
 
  In each timestep of the simulation, each particles position is updated, by calculating estimating the density at the particles location and thus deriving the pressure. Then pressure forces and viscous forces acting on the particle are used to calculate the change in velocity, which then determines the new position at the next timestep. </p>
 
+ <img src="images/simulation_simplified.PNG"/>
+
  So, for an SPH simulation as you can find it here, one needs two things:
 
  <ol>
@@ -39,10 +41,10 @@ As of 2024 new approaches exist, many based on SPH but with improvements to the 
  <li> A bunch of particles</li>
  </ol>
 <div style="padding: 1rem; margin:1rem">
- <img src="/images/grid_comp.png">
+ <img src="/images/grid_comp.png"/>
  </div>
 
- The <i>domain</i> keeps the particles bounded and is divided into a set of grid cells. This is important to reduce the number of particles the algorithm has to compare during density estimation.
+ The <i>domain</i> keeps the particles bounded and is divided into a set of grid cells. This is important to reduce the number of particles the algorithm has to compare during density estimation. In order to keep the particles within the domain the position of a particle is compared to the boundary dimensions, so for instance, if a particles' x-dimensions exceeds the x-dimension of the boundary, the particles x-position is reset, the velocity in that direction reversed and a damping factor applied, so that the particle loses energy upon bouncing off the wall.
 
  The <i>density</i> is measured by iterating over all the neighbouring particles within a Smoothing Radius (equal to the grid cell size) and summing up their local densities multiplied with a weighting factor depending on the distance to the particle of interest.
  
@@ -58,7 +60,9 @@ As of 2024 new approaches exist, many based on SPH but with improvements to the 
 
  ## Results thus far
 
- <p align="justify"> Currently we managed a basic interactive implementation of the SPH algorithm in Unity3D using ComputeShaders and GPU processing. It is still a little buggy, yet the domain can be moved, rotated, squished or made larger with the fluid behaving accordingly.</p>
+ <p align="justify"> Currently we managed a basic interactive implementation of the SPH algorithm in Unity3D using ComputeShaders and GPU processing. It is still a little buggy, yet the domain can be moved, rotated, squished or made larger with the fluid behaving accordingly.
+ 
+ In the following images you can see it in action. The animations you see are not pre-rendered but captured in real-time on a Windows PC and a Nvidia GeForce RTX 2080 GPU</p>
  
  <p float="left">
  <img src="/images/sph_1-ezgif.com-video-to-gif-converter.gif"/>
@@ -68,10 +72,23 @@ As of 2024 new approaches exist, many based on SPH but with improvements to the 
 
  ## Further Reading
  
+ SPH in astrophysics, R.A. Gingold, J.J Monaghan
 
+ <b>R. A. Gingold, J. J. Monaghan, Smoothed particle hydrodynamics: theory and application to non-spherical stars, Monthly Notices of the Royal Astronomical Society, Volume 181, Issue 3, December 1977, Pages 375–389, https://doi.org/10.1093/mnras/181.3.375</b>
 
+ Paper on SPH in interactive applications by Matthias Müller:
 
+ <b>Matthias Müller, David Charypar, and Markus Gross. 2003. Particle-based fluid simulation for interactive applications. In Proceedings of the 2003 ACM SIGGRAPH/Eurographics symposium on Computer animation (SCA '03). Eurographics Association, Goslar, DEU, 154–159.</b>
 
+## Other ressources
+
+In case you're interested in computer graphics and simulations, Matthias Müller hosts a series of short video lectures on the principles and implementation of various simulation techniques.
+
+>https://matthias-research.github.io/pages/tenMinutePhysics/index.html
+
+Also, heres a pretty cool video by Sebastian Lague on the simulation of fluids. Here he deals with the implementation of SPH as well.
+
+> https://www.youtube.com/watch?v=rSKMYc1CQHE
 
 
 

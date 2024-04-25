@@ -43,7 +43,16 @@ As of 2024 new approaches exist, many based on SPH but with improvements to the 
 
  The <i>domain</i> keeps the particles bounded and is divided into a set of grid cells. This is important to reduce the number of particles the algorithm has to compare during density estimation.
 
- The <i>density</i> is measured by iterating over all the neighbouring particles within a Smoothing Radius, and summing up their local densities multiplied with a weighting factor depending on the distance to the particle of interest </p>
+ The <i>density</i> is measured by iterating over all the neighbouring particles within a Smoothing Radius, and summing up their local densities multiplied with a weighting factor depending on the distance to the particle of interest.
+ 
+ For density estimation as well as the calculation of the pressure and viscous forces different <i> Smoothing Kernels</i> or their derivatives are applied. </p>
+
+ ## Results thus far
+
+ <p align="justify"> Currently we managed a basic interactive implementation of the SPH algorithm in Unity3D using ComputeShaders and GPU processing. It is still a little buggy, yet the domain can be moved, rotated, squished or made larger with the fluid behaving accordingly.</p>
+
+ ## Further Reading
+ 
 
 
 

@@ -126,7 +126,8 @@ Once you have these, you can perform the following steps: <br>
 </div>
 <br>
 
-The domain keeps particles bounded and is divided into grid cells, reducing the number of comparisons during density estimation (steps 1 and 2).
+The domain keeps particles bounded and is divided into grid cells, reducing the number of comparisons during density estimation (steps 1 and 2). <i>Hashing</i> means the transformation of a 3d position vector into a 1d grid cell id.<br>
+Here, we follow the procedure as described by Matthias Müller in his <i>10 Minute Physics</i> video lecture series on <i>Spatial Hashing</i>, to which we'll direct you for the details of this procedure.
 
 To keep particles within the domain, their positions are compared to boundary dimensions. If a particle exceeds these dimensions, its position is reset, velocity reversed, and a damping factor applied to lose energy upon bouncing off the wall.
 

@@ -1,4 +1,4 @@
-<img src="/images/title_loop0001-0800-ezgif.com-video-to-gif-converter.gif">
+
 
 
 #  Smoothed Particle Hydrodynamics 
@@ -39,7 +39,11 @@ Groups and Institutions involved include the Biomedical physics group of Prof. D
 Despite its modest nervous system compared to humans, <i>C. elegans</i> exhibits diverse behaviors, thanks to its mapped neural connections, available since 1986 (White et al, 1986). Now, with advanced computing power, we're exploring the possibility of simulating this system to understand real nervous systems better. Thus we're asking: Can we simulate this tiny system? What can it teach us about real nervous systems? And can it aid experimentalists in predicting and exploring new hypotheses?
 
 While previous researchers have tackled these questions, today's tech landscape broadens the scope. If you're interested in collaborating for open science, feel free to reach out :-)
-</div>
+</div><br>
+
+<div align="center">
+<img src="/images/title_loop0001-0800-ezgif.com-video-to-gif-converter.gif">
+</div><br>
 
 ## The Matrix for Worms
 

@@ -8,7 +8,9 @@ Here we toyed around with a lagrangian, particle-based simulation technique for 
 
 ## Table of Contents
 
-<ol>
+<div align="center">
+<ol >
+<b>
 <li>C. Elegans Connectomics</li>
 <li>Applications of Smoothed Particle Hydrodynamics
 <li>Introduction to SPH
@@ -16,7 +18,9 @@ Here we toyed around with a lagrangian, particle-based simulation technique for 
 <li>Results
 <li> Further reading and sources
 <li> Further resources
+</b>
 </ol>
+</div>
 
 ## C. Elegans connectomics
 
@@ -157,14 +161,14 @@ In Unity, this parallel processing is facilitated by Compute Shaders, allowing S
 
  <p align="justify"> Currently we got a basic interactive implementation of the SPH algorithm to run in Unity3D using ComputeShaders and GPU processing. It is still a little buggy, yet the domain can be moved, rotated, squished or made larger with the fluid behaving accordingly.
  
- In the following images you can see it in action. The animations you see are not pre-rendered but captured in real-time on a Windows PC and a Nvidia GeForce RTX 2080 GPU</p>
+ In the following images you can see it in action. The animations you see are not pre-rendered but captured in real-time on a Windows PC and a Nvidia GeForce RTX 2080 GPU</p><br>
  
  <p float="left" align="center">
  <img src="/images/sph_1-ezgif.com-video-to-gif-converter.gif"/>
  <img src="/images/sph_2-ezgif.com-video-to-gif-converter.gif"/>
  <img src="/images/sph_3-ezgif.com-video-to-gif-converter.gif"/>
- </p>
-
+ </p> <br>
+ 
  <p> In future, we'd like to add physical bodies interacting with the fluid, namely a mass-spring-representation of a worms' body, like in previous works by Palyanov et. al (2012), but adapted to an interactive environment </p>
  </div>
 

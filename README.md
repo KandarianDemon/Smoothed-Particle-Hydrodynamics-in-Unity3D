@@ -1,3 +1,6 @@
+<img src="/images/title_loop0001-0800-ezgif.com-video-to-gif-converter.gif">
+
+
 #  Smoothed Particle Hydrodynamics 
 
 > Water can flow or it can crash. Be water, my friend - Bruce Lee
@@ -209,6 +212,8 @@ Also, heres a pretty cool video by Sebastian Lague on the simulation of fluids. 
 <div align="justify">
 <p>The texts published here were drafted by the author, but adapted and made more concise using ChatGPT.</p>
 </div>
+
+
 
 
 

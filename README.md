@@ -12,12 +12,14 @@ Here we toyed around with a lagrangian, particle-based simulation technique for 
 <ol >
 <b>
 <li>C. Elegans Connectomics</li>
+<li> The Matrix for Worms
 <li>Applications of Smoothed Particle Hydrodynamics
-<li>Introduction to SPH
-<li>Implementation overview
+<li>A brief introduction to SPH
+<li>Implementation in Unity3D
 <li>Results
 <li> Further reading and sources
 <li> Further resources
+<li> Disclaimer
 </b>
 </ol>
 </div>
@@ -181,6 +183,10 @@ In Unity, this parallel processing is facilitated by Compute Shaders, allowing S
  Paper on SPH in interactive applications by Matthias Müller:
 
  <b>Matthias Müller, David Charypar, and Markus Gross. 2003. Particle-based fluid simulation for interactive applications. In Proceedings of the 2003 ACM SIGGRAPH/Eurographics symposium on Computer animation (SCA '03). Eurographics Association, Goslar, DEU, 154–159.</b>
+
+ <i>Sibernetic</i> a particle-based simulation engine for biophysical simulation of <i>C. Elegans</i> locomotion. Based on the PCISPH method, but not in an interactive Setting.
+
+  <b>Palyanov A, Khayrulin S, Larson SD, Dibert A. Towards a virtual C. elegans: a framework for simulation and visualization of the neuromuscular system in a 3D physical environment. In Silico Biol. 2011-2012;11(3-4):137-47. doi: 10.3233/ISB-2012-0445. PMID: 22935967.</b>
 
 ## Other ressources
 

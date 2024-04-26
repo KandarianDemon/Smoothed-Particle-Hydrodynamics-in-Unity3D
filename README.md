@@ -4,7 +4,7 @@
 
 <p align = "justify">This repository is part of a project aiming to build an interactive biophysical simulation of <i>C. Elegans</i> and its locomotion behaviour. And especially, it's a great sandbox to unite a passion for neurobiology, biophysics, computer graphics and film :-). <br>
 
-Here we toyed around with a lagrangian, particle-based simulation technique for fluids, which at some point should represent the liquid environment a virtual worm inhabits.
+Here we toyed around with a lagrangian, particle-based simulation technique for fluids, which at some point should represent the liquid environment a virtual worm or some other virtual parasite inhabits.
 
 ## Table of Contents
 
@@ -21,27 +21,21 @@ Here we toyed around with a lagrangian, particle-based simulation technique for 
 ## C. Elegans connectomics
 
 <div align="justify">
-<i>C. Elegans</i> is tiny. At about 1mm in length, 80 micrometers in diameter it lives its microscopic life in the moist environment rotting fruit or the soil. It is especially interesting to biologists, due to its constant cell size of 959 somatic cells, 300 of which comprise its nervous system, and 95 of which being the body wall muscles relevant for locomotion.<br>
+<i>C. Elegans</i>, measuring a mere 1mm in length, resides in the microscopic world of decaying fruit or soil. Biologists find its 959 somatic cells intriguing, particularly its 300 neurons governing locomotion.
 
-These 300 neurons are capable of integrating sensory information from the exterior and interior and decide on which action our tiny worm will take, given the situation he finds himself in. 300 neurons, unlike the 86 000 000 000 neurons in humans, is a tiny number, still comprehensible to human minds. But despite this "reduced" nervous system <i>C. elegans</i> is capable of various behavioural programmes, which makes an interesting organism to study how a nervous system integrates information and decides on locomotor action.
+Despite its modest nervous system compared to humans, <i>C. elegans</i> exhibits diverse behaviors, thanks to its mapped neural connections, available since 1986 (White et al, 1986). Now, with advanced computing power, we're exploring the possibility of simulating this system to understand real nervous systems better. Thus we're asking: Can we simulate this tiny system? What can it teach us about real nervous systems? And can it aid experimentalists in predicting and exploring new hypotheses?
 
-Luckily, the nervous system has been mapped and studied for a long time, and since 1986 (see J, White; et al 1986) a map of all the neuronal connections is present. Of course, that sounds simpler than it actually is, but the point is that <i> Caenorhabditis Elegans</i> is the first and only animal of which a <b>full connectome </b> exists, and where it is comparatively feasible to study the connectome in detail. 
-
-These leads to many exciting question to be asked in neurobiology, information science and even philosophy, but in light of increasingly powerful computers we're asking: Is it possible to simulate this system? Can we combine a virtual environment with a virtual body and a virtual nervous system? What could such a model tell us about the real deal? How reduced can and must such a virtual system be to still accurately capture real behaviour? Can this be turned into a tool to be used in close conjunction with <i>C. Elegans</i> experimentalists to aid prediction and generate new hypotheses?
-
-Of course, over the past decades other researchers have wondered about this (eg. openworm.org or the <i>Si. Elegans</i>, roboticists etc.) and came up with very fascinating work. Yet the availability of powerful hardware and software for app and graphics development, as well as an abundance of learning resources for these tools gives access to computational methods to a greater audience, increasing the pool of people who can bring their knowledge and curiosity together to work on these problems.
-
-So anyone who is still reading and curious, in the name of open science, feel free to collaborate or send me a message :-)
+While previous researchers have tackled these questions, today's tech landscape broadens the scope. If you're interested in collaborating for open science, feel free to reach out :-)
 </div>
 
 ## The Matrix for Worms
 
 <div align="justify">
+
 As locomotive behaviour requires sensing the environment as well as interior states of the worms body we're trying to combine a simplified biophysical model of the worms body, e.g. a mass-spring-model with a particle-based simulation of its surrounding environment.
 
-One simple observable locomotive behaviour in relation to the viscosity of the environment is forward and backwards locomotion. In viscous environments, like agar, the characteristic crawling motion pattern can be observed, whereas in less viscous environments, like water, swimming motions are displayed.
+In different environments, like agar or water, we observe distinct locomotion patterns. Agar yields the classic crawling motion, while water prompts swimming motions. We can differentiate them by analyzing body curvature wavelengths and beating frequencies.
 
-Both can be distinguished through the wavelengths of the body curvature traversing the body, as well as the beating frequency.
 
 <img src="/images/crawling_loop0001-0025.gif">
 <img src="/images/swimming_loop0001-0025.gif">
@@ -51,67 +45,61 @@ Both can be distinguished through the wavelengths of the body curvature traversi
 
 </div>
 
+One goal of an connectome-base integrated biophysical model would be to study if such a model is capable of sensing changes in environment, eg. the viscosity and adapt behaviour accordingly and, if it does so, how close it resembles the behaviour of the actual animal.
+
 ## Applications of SPH
 
  <div align="justify">
- <p align="justify"> Originally developed to simulate processes in Astrophysics in the 1970s it gained popularity in computer graphics as a means to simulate the behaviour of fluids. It has been especially popular in the film, vfx and video game industries, as it enables the simulation of fluid behaviour in real-time.
- 
- If you've seen <i>The Return of the King</i> you may remember Gollum drowning in a sea of lava after following the One ring to its doom. That lava simulation is based on the SPH algorithm.
 
-As of 2024 new approaches exist of course, many based on SPH but with improvements to the original algorithm, leading to more accurate and stable simulation results. However, to get into interactive fluid simulations we thought it a good idea to start with the basics to get familiar with some of the concepts. And apart from that, it's fun</p>
+Originally developed in the 1970s to model processes in astrophysics, the Smoothed Particle Hydrodynamics (SPH) algorithm found its way into computer graphics, particularly in simulating fluid behavior. It gained significant traction in industries like film, visual effects (VFX), and video games, enabling real-time fluid simulations.
+
+For instance, in <i>The Return of the King</i>, you might recall the dramatic scene where Gollum meets his demise in a sea of lava—a stunning visual brought to life using the SPH algorithm.
+
+Fast forward to 2024, and while new approaches have emerged, many still build upon SPH, enhancing its original capabilities for more precise and stable results. Other methods like Lattice Boltzmann methods, Eulerian fluid simulation, and particle-based methods such as Position-Based Fluids (PBF) and Material Point Method (MPM) offer different strengths, like efficiency for complex flows or handling fluid-solid interactions. Yet, SPH remains popular due to its versatility, particularly in real-time applications and its ability to capture complex fluid behaviors with relatively straightforward implementations. But sometimes, it's best to start with the basics, not just for mastering concepts but also because, well, it's just plain fun. 
 
  ## A brief introduction to SPH
 
 
- <p align="justify"> In <i>Smoothed Particle Hydrodynamics</i> a fluid volume is discretized in a set of particles. These particles carry a <i>reference density, velocity, pressure </i> and <i>position</i>. 
+ <p align="justify"> 
+In Smoothed Particle Hydrodynamics (SPH), we break down a fluid volume into a collection of particles, each with its own set of properties like reference density, velocity, pressure, and position.
 
- In each timestep of the simulation, each particles position is updated, by estimating the density at the particles location and thus deriving the pressure. Then pressure forces and viscous forces acting on the particle are used to calculate the change in velocity, which then determines the new position at the next timestep. </p>
+During each simulation timestep, we update the position of each particle. First, we estimate the density at each particle's location to derive the pressure. Then, we calculate the pressure and viscous forces acting on the particle to determine the change in velocity. Finally, this velocity change determines the particle's new position for the next timestep.
+ 
+ </p>
 
 <div align="center">
  <img src="images/simulation_simplified.PNG"/>
  </div>
 
- So, for an SPH simulation as you can find it here, one needs two things:
+<div align="justify">
+ For an SPH simulation, you need:
 
- <ol>
- <li> A domain or grid</li>
- <li> A bunch of particles</li>
- </ol>
+<ol>
+<li>A domain or grid.
+<li>A bunch of particles.
+</ol>
+Once you have these, you can perform the following steps:
 
- And once we have that, we can perform the following steps:
-
- 
-
-<div style="padding: 1rem; margin:1rem">
- <img src="/images/grid_comp.png"/>
- </div>
-
- <ol>
- <li> Hashing
- <li> Neighborhood
- <li> Density estimation
- <li> pressure estimation
- <li> Computation of Forces
- <li> Integration 
+<ol>
+<li>Hashing
+<li>Neighborhood
+<li>Density estimation
+<li>Pressure estimation
+<li>Computation of forces
+<li>Integration
 </ol>
 
+The domain keeps particles bounded and is divided into grid cells, reducing the number of comparisons during density estimation (steps 1 and 2).
 
- The <i>domain</i> keeps the particles bounded and is divided into a set of grid cells. This is important to reduce the number of particles the algorithm has to compare during density estimation and corresponds to steps 1 and 2 in the procedure stated above.
+To keep particles within the domain, their positions are compared to boundary dimensions. If a particle exceeds these dimensions, its position is reset, velocity reversed, and a damping factor applied to lose energy upon bouncing off the wall.
 
- In order to keep the particles within the domain the position of a particle is compared to the boundary dimensions, so for instance, if a particles' x-dimensions exceeds the x-dimension of the boundary, the particles x-position is reset, the velocity in that direction reversed and a damping factor applied, so that the particle loses energy upon bouncing off the wall.
+Density is measured by summing neighboring particles' densities within a smoothing radius (equal to the grid cell size), weighted by distance.
 
- 
+Different smoothing kernels are applied for density estimation, pressure calculation, and viscous forces.
 
+Particle-based methods like SPH enable parallel processing on the GPU, speeding up simulations by processing particles simultaneously. GPUs, integral to computer graphics, handle rendering tasks efficiently, utilizing shaders for pixel processing.
 
- The <i>density</i> is measured by iterating over all the neighbouring particles within a Smoothing Radius (equal to the grid cell size) and summing up their local densities multiplied with a weighting factor depending on the distance to the particle of interest.
- 
- For density estimation as well as the calculation of the pressure and viscous forces different <i> Smoothing Kernels</i> or their derivatives are applied. 
- 
- One advantage of particle-based fluid simulation methods is, that they allow for parallel processing on the GPU. So instead of processing each particle in sequence (and you can high numbers of particles in your simulation), you can process them in parallel simulataneously. Of course that requires the computer to have a GPU installed.
-
- Not surprisingly is the GPU or <i>Graphics Processing Unit</i> an integral part to computer graphics and is responsible for most of the things you see on your screen. If you want to see a green orb on screen, you take your geometric information (vertices and edges), describing the sphere and then you pass it to a <i>Shader</i>-script, describing <i>how</i> the Sphere should look like. Shaders most commonly use the GPU, where each pixel on the screen is processed in parallel.
-
- In Unity we can use that to move our particle simulation to the GPU as well, a so-called <i>Compute Shader</i>
+In Unity, this parallel processing is facilitated by Compute Shaders, allowing SPH simulations to run on the GPU.
  </p>
 
  </div>
@@ -176,6 +164,12 @@ In case you're interested in computer graphics and simulations, Matthias Müller
 Also, heres a pretty cool video by Sebastian Lague on the simulation of fluids. Here he deals with the implementation of SPH as well.
 
 > https://www.youtube.com/watch?v=rSKMYc1CQHE
+
+## Disclaimer
+
+<div align="justify">
+<p>The texts published here were drafted by the author, but adapted and made more concise using ChatGPT.</p>
+</div>
 
 
 

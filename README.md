@@ -204,6 +204,10 @@ In Unity, this parallel processing is facilitated by Compute Shaders, allowing S
 
   <b>Palyanov A, Khayrulin S, Larson SD, Dibert A. Towards a virtual C. elegans: a framework for simulation and visualization of the neuromuscular system in a 3D physical environment. In Silico Biol. 2011-2012;11(3-4):137-47. doi: 10.3233/ISB-2012-0445. PMID: 22935967.</b>
 
+ Original publication on the connectome and structure of the <i>C. Elegans nervous system</i>:
+
+ <b>White JG, Southgate E, Thomson JN, Brenner S. The structure of the nervous system of the nematode Caenorhabditis elegans. Philos Trans R Soc Lond B Biol Sci. 1986 Nov 12;314(1165):1-340. doi: 10.1098/rstb.1986.0056. PMID: 22462104.</b>
+
 ## Other ressources
 
 In case you're interested in computer graphics and simulations, Matthias Müller hosts a series of short video lectures on the principles and implementation of various simulation techniques.
@@ -218,6 +222,7 @@ Also, heres a pretty cool video by Sebastian Lague on the simulation of fluids. 
 
 <div align="justify">
 <p>The texts published here were drafted by the author, but adapted and made more concise using ChatGPT.</p>
+
 </div>
 
 

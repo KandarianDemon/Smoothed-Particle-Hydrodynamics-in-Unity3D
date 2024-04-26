@@ -68,19 +68,29 @@ During each simulation timestep, we update the position of each particle. First,
  </p>
 
 <div align="center">
+</br>
  <img src="images/simulation_simplified.PNG"/>
+ 
  </div>
-
+</br>
 <div align="justify">
  For an SPH simulation, you need:
 
+<div align="center">
+
 <ol>
+</br>
 <li>A domain or grid.
 <li>A bunch of particles.
 </ol>
-Once you have these, you can perform the following steps:
+</div> <br>
 
+
+Once you have these, you can perform the following steps: <br>
+<br>
+<div align="center">
 <ol>
+
 <li>Hashing
 <li>Neighborhood
 <li>Density estimation
@@ -88,6 +98,8 @@ Once you have these, you can perform the following steps:
 <li>Computation of forces
 <li>Integration
 </ol>
+</div>
+<br>
 
 The domain keeps particles bounded and is divided into grid cells, reducing the number of comparisons during density estimation (steps 1 and 2).
 
@@ -95,7 +107,7 @@ To keep particles within the domain, their positions are compared to boundary di
 
 Density is measured by summing neighboring particles' densities within a smoothing radius (equal to the grid cell size), weighted by distance.
 
-Different smoothing kernels are applied for density estimation, pressure calculation, and viscous forces.
+Different smoothing kernels are applied for density estimation, pressure calculation, and viscous forces (see Müller et al, 2003).
 
 Particle-based methods like SPH enable parallel processing on the GPU, speeding up simulations by processing particles simultaneously. GPUs, integral to computer graphics, handle rendering tasks efficiently, utilizing shaders for pixel processing.
 
@@ -107,12 +119,17 @@ In Unity, this parallel processing is facilitated by Compute Shaders, allowing S
  ## Implementation in Unity3D
 
   <div align="justify">
+
+  For this implementation we require a few ingredients, namely:
   <ul>
-  <li> Shaders (Billboard shader to render particles, particle shader and material)
-  <li> Compute Shader Handling (Initialization and dispatch during update loop)
-  <li> Particle system (simulation parameters, initialization of particles and SPH settings)
+  
+ 
+  <li> Particle system (simulation parameters, initialization of particles and SPH settings, Initialization and dispatch of ComputeShader kernels)
+  <li> Domain (transform of the simulation space, rendering the domain boundaries using GL-Lines)
+   
+  
   <li> Compute Shader (SPH algorithm, in parallel for each particle, GPU)
-  <li> GLLines, uses GLLines library to draw the bounding box in-game.
+  <li> Shaders (Billboard shader to render particles as circles facing the camera, particle shader and material to render the particles on screen)
   </ul>
   </div>
 
@@ -122,9 +139,9 @@ In Unity, this parallel processing is facilitated by Compute Shaders, allowing S
 
   Last but not least a domain is required. We use the GL-Lines library to draw the box on screen. The domains transform properties (e.g. scale, rotation and translation) is then connected to the compute shader and updated every time the user adjusts the transform. Therefore enabling the simulation to react in real-time to changes to the domain.
 
-  In order to actually SEE our particles doing something a shader is required, which is applied to the object holding the particle-system component.
+  In order to actually SEE our particles doing something a shader and a material is required, which is applied to the object holding the particle-system component. I will skip the details for now, but we basically take the particle buffer and during each render step in the <b>OnRender()</b>-method the <i>Graphics</i>-class is used to render all the particles as sprites at their corresponding locations.
 
-  <b>On-Render Function, Graphics.DrawInstancedProcedural
+  
 
 
 
@@ -136,7 +153,7 @@ In Unity, this parallel processing is facilitated by Compute Shaders, allowing S
  
  In the following images you can see it in action. The animations you see are not pre-rendered but captured in real-time on a Windows PC and a Nvidia GeForce RTX 2080 GPU</p>
  
- <p float="left">
+ <p float="left" align="center">
  <img src="/images/sph_1-ezgif.com-video-to-gif-converter.gif"/>
  <img src="/images/sph_2-ezgif.com-video-to-gif-converter.gif"/>
  <img src="/images/sph_3-ezgif.com-video-to-gif-converter.gif"/>

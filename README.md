@@ -42,7 +42,7 @@ While previous researchers have tackled these questions, today's tech landscape 
 </div><br>
 
 <div align="center">
-<img src="/images/title_loop0001-0800-ezgif.com-video-to-gif-converter(1).gif">
+<img src="/images/title_loop0001-0800-ezgif.com-video-to-gif-converter (1).gif">
 </div><br>
 
 ## The Matrix for Worms

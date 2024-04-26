@@ -36,10 +36,14 @@ As locomotive behaviour requires sensing the environment as well as interior sta
 
 In different environments, like agar or water, we observe distinct locomotion patterns. Agar yields the classic crawling motion, while water prompts swimming motions. We can differentiate them by analyzing body curvature wavelengths and beating frequencies.
 
-
+<div>
 <img src="/images/crawling_loop0001-0025.gif">
+<p>Crawling locomotion</p>
+</div>
+<div>
 <img src="/images/swimming_loop0001-0025.gif">
-
+<p> Swimming locomotion </p>
+</div>
 
  </p>
 

@@ -7,7 +7,7 @@
 
 <p align = "justify">This repository is part of a project aiming to build an interactive biophysical simulation of <i>C. Elegans</i> and its locomotion behaviour. And especially, it's a great sandbox to unite a passion for neurobiology, biophysics, computer graphics and film :-). <br>
 
-Here we toyed around with a lagrangian, particle-based simulation technique for fluids, which at some point should represent the liquid environment a virtual worm or some other virtual parasite inhabits.
+Here we toyed around with a lagrangian, particle-based simulation technique for fluids called <i>Smoothed Particle Hydrodynamics</i>, which at some point should represent the liquid environment a virtual worm or some other virtual parasite inhabits.
 
 Groups and Institutions involved include the Biomedical physics group of Prof. Dr. Kollmannsberger at the HHU Düsseldorf and the department of microscopy at the faculty of biology of the JMU Würzburg led by Prof.Dr. Christian Stigloher
 

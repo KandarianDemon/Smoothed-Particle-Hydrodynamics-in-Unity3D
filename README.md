@@ -34,11 +34,13 @@ Groups and Institutions involved include the Biomedical physics group of Prof. D
 ## C. Elegans connectomics
 
 <div align="justify">
-<i>C. Elegans</i>, measuring a mere 1mm in length, resides in the microscopic world of decaying fruit or soil. Biologists find its 959 somatic cells intriguing, particularly its 300 neurons comprising the nervous system and 95 body wall muscles governing locomotion. <br>
+<i>C. Elegans</i>, measuring a mere 1mm in length, resides in the microscopic world of decaying fruit or soil. Biologists find its 959 somatic cells intriguing, particularly its 300 neurons comprising the nervous system and 95 body wall muscles governing locomotion.<br>
+<br>
 
 <div align="center">
 <img src="/images/title_loop0001-0800-ezgif.com-video-to-gif-converter (1).gif">
 </div><br>
+<br>
 
 Despite its modest nervous system compared to humans, <i>C. elegans</i> exhibits diverse behaviors, thanks to its mapped neural connections, available since 1986 (White et al, 1986). Now, with advanced computing power, we're exploring the possibility of simulating this system to understand real nervous systems better. Thus we're asking: Can we simulate this tiny system? What can it teach us about real nervous systems? And can it aid experimentalists in predicting and exploring new hypotheses?
 

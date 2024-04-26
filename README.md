@@ -58,14 +58,14 @@ Both can be distinguished through the wavelengths of the body curvature traversi
  
  If you've seen <i>The Return of the King</i> you may remember Gollum drowning in a sea of lava after following the One ring to its doom. That lava simulation is based on the SPH algorithm.
 
-As of 2024 new approaches exist of course, many based on SPH but with improvements to the original algorithm, leading to more accurate and stable simulation results. However, to get into interactive fluid simulations we thought it a good idea to start with the basics to get familiar with some of the concepts. </p>
+As of 2024 new approaches exist of course, many based on SPH but with improvements to the original algorithm, leading to more accurate and stable simulation results. However, to get into interactive fluid simulations we thought it a good idea to start with the basics to get familiar with some of the concepts. And apart from that, it's fun</p>
 
  ## A brief introduction to SPH
 
- > I'm singing in the rain. Just singing in the rain. What a glorious feeling. I'm happy again - Gene Kelly
+
  <p align="justify"> In <i>Smoothed Particle Hydrodynamics</i> a fluid volume is discretized in a set of particles. These particles carry a <i>reference density, velocity, pressure </i> and <i>position</i>. 
 
- In each timestep of the simulation, each particles position is updated, by calculating estimating the density at the particles location and thus deriving the pressure. Then pressure forces and viscous forces acting on the particle are used to calculate the change in velocity, which then determines the new position at the next timestep. </p>
+ In each timestep of the simulation, each particles position is updated, by estimating the density at the particles location and thus deriving the pressure. Then pressure forces and viscous forces acting on the particle are used to calculate the change in velocity, which then determines the new position at the next timestep. </p>
 
 <div align="center">
  <img src="images/simulation_simplified.PNG"/>
@@ -77,17 +77,37 @@ As of 2024 new approaches exist of course, many based on SPH but with improvemen
  <li> A domain or grid</li>
  <li> A bunch of particles</li>
  </ol>
+
+ And once we have that, we can perform the following steps:
+
+ 
+
 <div style="padding: 1rem; margin:1rem">
  <img src="/images/grid_comp.png"/>
  </div>
 
- The <i>domain</i> keeps the particles bounded and is divided into a set of grid cells. This is important to reduce the number of particles the algorithm has to compare during density estimation. In order to keep the particles within the domain the position of a particle is compared to the boundary dimensions, so for instance, if a particles' x-dimensions exceeds the x-dimension of the boundary, the particles x-position is reset, the velocity in that direction reversed and a damping factor applied, so that the particle loses energy upon bouncing off the wall.
+ <ol>
+ <li> Hashing
+ <li> Neighborhood
+ <li> Density estimation
+ <li> pressure estimation
+ <li> Computation of Forces
+ <li> Integration 
+</ol>
+
+
+ The <i>domain</i> keeps the particles bounded and is divided into a set of grid cells. This is important to reduce the number of particles the algorithm has to compare during density estimation and corresponds to steps 1 and 2 in the procedure stated above.
+
+ In order to keep the particles within the domain the position of a particle is compared to the boundary dimensions, so for instance, if a particles' x-dimensions exceeds the x-dimension of the boundary, the particles x-position is reset, the velocity in that direction reversed and a damping factor applied, so that the particle loses energy upon bouncing off the wall.
+
+ 
+
 
  The <i>density</i> is measured by iterating over all the neighbouring particles within a Smoothing Radius (equal to the grid cell size) and summing up their local densities multiplied with a weighting factor depending on the distance to the particle of interest.
  
  For density estimation as well as the calculation of the pressure and viscous forces different <i> Smoothing Kernels</i> or their derivatives are applied. 
  
- One advantage of particle-based fluid simulation methods is, that they allow for parallel processing on the GPU. So instead of processing each particle in sequence (and you can get quite high numbers of particles in your simulation), you can process them in parallel simulataneously.
+ One advantage of particle-based fluid simulation methods is, that they allow for parallel processing on the GPU. So instead of processing each particle in sequence (and you can high numbers of particles in your simulation), you can process them in parallel simulataneously. Of course that requires the computer to have a GPU installed.
 
  Not surprisingly is the GPU or <i>Graphics Processing Unit</i> an integral part to computer graphics and is responsible for most of the things you see on your screen. If you want to see a green orb on screen, you take your geometric information (vertices and edges), describing the sphere and then you pass it to a <i>Shader</i>-script, describing <i>how</i> the Sphere should look like. Shaders most commonly use the GPU, where each pixel on the screen is processed in parallel.
 
@@ -96,7 +116,7 @@ As of 2024 new approaches exist of course, many based on SPH but with improvemen
 
  </div>
 
- ## Implementation
+ ## Implementation in Unity3D
 
   <div align="justify">
   <ul>
@@ -107,6 +127,18 @@ As of 2024 new approaches exist of course, many based on SPH but with improvemen
   <li> GLLines, uses GLLines library to draw the bounding box in-game.
   </ul>
   </div>
+
+  The SPH-Algorithm itself is performed by a ComputeShader, where each particle in a particle system is assigned a thread on the GPU. Each step in the procedure has its own shader kernel, which must be dispatched during the game loop on the CPU side.
+
+  To do so, we need a CPU-side particle system, that lets the user configure the number of particles, physical properties and sets up the required buffers for the GPU and connects them to the SPH compute shader.
+
+  Last but not least a domain is required. We use the GL-Lines library to draw the box on screen. The domains transform properties (e.g. scale, rotation and translation) is then connected to the compute shader and updated every time the user adjusts the transform. Therefore enabling the simulation to react in real-time to changes to the domain.
+
+  In order to actually SEE our particles doing something a shader is required, which is applied to the object holding the particle-system component.
+
+  <b>On-Render Function, Graphics.DrawInstancedProcedural
+
+
 
  ## Results
 

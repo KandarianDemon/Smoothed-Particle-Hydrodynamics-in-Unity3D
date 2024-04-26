@@ -6,6 +6,10 @@
 
 Here we toyed around with a lagrangian, particle-based simulation technique for fluids, which at some point should represent the liquid environment a virtual worm or some other virtual parasite inhabits.
 
+Groups and Institutions involved include the Biomedical physics group of Prof. Dr. Kollmannsberger at the HHU Düsseldorf, the department of microscopy at the faculty of biology of the JMU Würzburg led by Prof.Dr. Christian Stigloher
+
+
+
 ## Table of Contents
 
 <div align="center">

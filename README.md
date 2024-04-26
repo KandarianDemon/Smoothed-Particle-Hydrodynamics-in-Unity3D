@@ -6,7 +6,7 @@
 
 Here we toyed around with a lagrangian, particle-based simulation technique for fluids, which at some point should represent the liquid environment a virtual worm or some other virtual parasite inhabits.
 
-Groups and Institutions involved include the Biomedical physics group of Prof. Dr. Kollmannsberger at the HHU Düsseldorf, the department of microscopy at the faculty of biology of the JMU Würzburg led by Prof.Dr. Christian Stigloher
+Groups and Institutions involved include the Biomedical physics group of Prof. Dr. Kollmannsberger at the HHU Düsseldorf and the department of microscopy at the faculty of biology of the JMU Würzburg led by Prof.Dr. Christian Stigloher
 
 
 
@@ -31,7 +31,7 @@ Groups and Institutions involved include the Biomedical physics group of Prof. D
 ## C. Elegans connectomics
 
 <div align="justify">
-<i>C. Elegans</i>, measuring a mere 1mm in length, resides in the microscopic world of decaying fruit or soil. Biologists find its 959 somatic cells intriguing, particularly its 300 neurons governing locomotion.
+<i>C. Elegans</i>, measuring a mere 1mm in length, resides in the microscopic world of decaying fruit or soil. Biologists find its 959 somatic cells intriguing, particularly its 300 neurons comprising the nervous system and 95 body wall muscles governing locomotion.
 
 Despite its modest nervous system compared to humans, <i>C. elegans</i> exhibits diverse behaviors, thanks to its mapped neural connections, available since 1986 (White et al, 1986). Now, with advanced computing power, we're exploring the possibility of simulating this system to understand real nervous systems better. Thus we're asking: Can we simulate this tiny system? What can it teach us about real nervous systems? And can it aid experimentalists in predicting and exploring new hypotheses?
 
@@ -125,7 +125,9 @@ Density is measured by summing neighboring particles' densities within a smoothi
 
 Different smoothing kernels are applied for density estimation, pressure calculation, and viscous forces (see Müller et al, 2003).
 
-Particle-based methods like SPH enable parallel processing on the GPU, speeding up simulations by processing particles simultaneously. GPUs, integral to computer graphics, handle rendering tasks efficiently, utilizing shaders for pixel processing.
+During the final integration we use eulers' method, as its implementation is very straight forward, especially for biologists turning towards computer science. Other integration schemes however, may yield numerically more stable results (e.g. Verlet-integration etc) and we'll implement these in the future as well.
+
+Particle-based methods like SPH enable parallel processing on the GPU, speeding up simulations by processing particles simultaneously. GPUs, integral to computer graphics, handle rendering tasks efficiently, utilizing shaders for pixel processing. In Unity, we can use a "Compute Shader" to assign different data (instead of pixels) to a single thread and thus process big data, such as particles, in parallel.
 
 In Unity, this parallel processing is facilitated by Compute Shaders, allowing SPH simulations to run on the GPU.
  </p>

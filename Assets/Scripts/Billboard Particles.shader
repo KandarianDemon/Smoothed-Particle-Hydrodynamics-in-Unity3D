@@ -13,12 +13,12 @@ Shader "Custom/Billboard Particles"
 			Pass
 			{
 				Cull Back
-				Lighting Off
-				Zwrite Off
+				Lighting On
+				Zwrite On
 
 			//Blend SrcAlpha OneMinusSrcAlpha
-			//Blend One OneMinusSrcAlpha
-			Blend One One
+			Blend One OneMinusSrcAlpha
+			//Blend One One
 			//Blend OneMinusDstColor One
 
 			LOD 200
@@ -59,6 +59,8 @@ Shader "Custom/Billboard Particles"
 
 				int hash;
 				int index;
+
+				int _static;
               
             };
 
@@ -112,6 +114,11 @@ Shader "Custom/Billboard Particles"
 				};
 
 
+				// sphere impostor:
+
+				
+
+
 				// if(inst == cellOfInterest) {
 				// 	_SizeMul = 3.0f;}
 
@@ -155,7 +162,9 @@ Shader "Custom/Billboard Particles"
 									break;
 					case 2: o.col =  float4(1-p_value,p_value,0,0);
 									break;
-				}
+					case 3: o.col = float4(particles[inst].color,0);
+									break;
+									}
 				//o.col = float4(0,v_value,1-v_value,1);
 				//o.col = (length(particles[inst].velocity) >= v_max) ? float4(1,1,0,1):float4(1,0,0,1);
 				o.radius =particles[inst].radius;
@@ -174,7 +183,7 @@ Shader "Custom/Billboard Particles"
 
 				if(dst > 0.5) discard;
 
-				return float4(i.col.xyz*shading,1);
+				return fixed4(i.col.xyz,1);
 			}
 
 			ENDCG

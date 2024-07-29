@@ -4,6 +4,7 @@ using UnityEngine;
 using System;
 using System.Runtime.InteropServices;
 using UnityEditor;
+using System.Linq;
 
 [RequireComponent(typeof(MeshRenderer),typeof(MeshFilter))]
 public class ParticleSystem : MonoBehaviour
@@ -43,7 +44,7 @@ public class ParticleSystem : MonoBehaviour
 
     public bool debugParticles;
     
-    [Range(0,2)]
+    [Range(0,3)]
     public int visMode;
     
     [Range(500,10000)]
@@ -55,10 +56,10 @@ public class ParticleSystem : MonoBehaviour
     public float maxPressure;
 
 
-   
+     public PrimitiveType type;
 
 
-
+    
 
     #endregion
 
@@ -90,6 +91,9 @@ public class ParticleSystem : MonoBehaviour
     public ComputeBuffer CELLCOUNT;
     public int[] cellCount;
 
+
+    public ComputeBuffer TRIANGLES;
+    public ComputeBuffer VERTICES;
    
 
     public ComputeBuffer PARTICLE_MAP;
@@ -119,11 +123,19 @@ public class ParticleSystem : MonoBehaviour
 
     [Header("Rendering and Bounding Box")]
     public Material renderMaterial;
+
+    public Material memMat;
      public MeshRenderer renderer;
     public MeshFilter filter;
     ComputeBuffer argsBuffer;
     uint[] args = new uint[5] {0,0,0,0,0};
     public Mesh particleMesh;
+
+
+
+    [Header("Membrane and other objects")]
+    
+    public ComputeBuffer membraneVerts;
 
     // particle billboard shader
     // quad for Graphics.DrawProceduralNow
@@ -133,13 +145,66 @@ public class ParticleSystem : MonoBehaviour
 
     void Awake()
     {
-         renderer = gameObject.GetComponent<MeshRenderer>();
+        renderer = gameObject.GetComponent<MeshRenderer>();
         filter =   gameObject.GetComponent<MeshFilter>();
+
+        // GameObject membraneObject = new GameObject("Membrane");
+        // MeshFilter memFilter = membraneObject.gameObject.AddComponent<MeshFilter>();
+        // MeshRenderer memRenderer = membraneObject.gameObject.AddComponent<MeshRenderer>();
+
+
+        // Mesh mesh = Generate_Membrane(5,10);
+        // mesh.RecalculateNormals();
+        // memFilter.mesh = mesh;
+
+        GameObject cube = GameObject.CreatePrimitive(type);
+        cube.transform.localScale = cube.transform.localScale*2.5f;
+        cube.name = "Cube";
+        cube.transform.position = cube.transform.position + new Vector3(0,2.5f,0);
+
+        MeshFilter cubeFilter = cube.GetComponent<MeshFilter>();
+        MeshRenderer cubeRenderer = cube.GetComponent<MeshRenderer>();
+        cubeFilter.mesh.RecalculateNormals();
+
+
+        //membraneObject.transform.SetParent(GameObject.Find("GameObject").transform);
+        cube.transform.SetParent(GameObject.Find("GameObject").transform);
+
+
+        membraneVerts = new ComputeBuffer(cubeFilter.mesh.vertices.Length, sizeof(float)*3);
+
+        // get world position
+
+        Vector3[] worldVerts = new Vector3[cubeFilter.mesh.vertices.Length];
+
+        for(int i = 0; i < worldVerts.Length;i++)
+        {
+            worldVerts[i] = gameObject.transform.TransformPoint(cubeFilter.mesh.vertices[i]);
+        }
+        
+
+        membraneVerts.SetData(worldVerts);
+        //memRenderer.material = memMat;
+
+        cubeRenderer.material = memMat;
+        memMat.SetBuffer("vertices", membraneVerts);
+
+
+        
+
+
+        
 
        
         InitializeParticles();
         CreateBuffers();
         InitShader();
+
+
+
+
+
+        
 
        
     }
@@ -148,6 +213,16 @@ public class ParticleSystem : MonoBehaviour
     void OnDrawGizmos()
     {
 
+        // GameObject mem = GameObject.Find("Membrane");
+
+        // Mesh m = mem.GetComponent<MeshFilter>().mesh;
+
+        // for(int i = 0; i< m.vertices.Length;i++)
+        // {
+        //     Gizmos.color = Color.red;
+        //     Gizmos.DrawSphere(m.vertices[i], 0.2f);
+        //     Handles.Label(m.vertices[i] + new Vector3(0,1,0), i.ToString());
+        // }
         // Vector3 dimDom = domain.GetComponent<GLLines>().GetDimensions();
 
 
@@ -169,8 +244,8 @@ public class ParticleSystem : MonoBehaviour
         //     }
         // }
 
-         Vector3 dims = transform.localScale/smoothingRadius;
-          Handles.Label(this.transform.position + new Vector3(0,11,0),  " number of cells " + (Mathf.FloorToInt(dims.x) * Mathf.FloorToInt(dims.y) * Mathf.FloorToInt(dims.z)).ToString());
+        Vector3 dims = transform.localScale/smoothingRadius;
+        Handles.Label(this.transform.position + new Vector3(0,11,0),  " number of cells " + (Mathf.FloorToInt(dims.x) * Mathf.FloorToInt(dims.y) * Mathf.FloorToInt(dims.z)).ToString());
        
        
 
@@ -192,11 +267,56 @@ public class ParticleSystem : MonoBehaviour
 
         int groupsX = Mathf.Max(Mathf.CeilToInt(numberOfParticles/512.0f),1);
 
-      
+        // grab verts of membrane and turn them into a particle Array. Then merge fluid particles and membrane particles.
+        // Then tell the init kernel which indices to skip (because here are the membrane vertices)
         
+        GameObject membrane = GameObject.Find("Cube");
+
+        Vector3[] worldVerts = new Vector3[membrane.GetComponent<MeshFilter>().mesh.vertices.Length];
+
+        for(int i = 0; i<worldVerts.Length;i++)
+        {
+            worldVerts[i] = membrane.transform.TransformPoint(membrane.GetComponent<MeshFilter>().mesh.vertices[i]);
+        }
+        Vector3[] verts =Convert_Vertices_To_Local( worldVerts, gameObject.transform);
+
+        Particle[] memParticles = new Particle[verts.Length];
+        for(int i = 0; i<memParticles.Length;i++){
+
+            memParticles[i].position = worldVerts[i];
+            memParticles[i]._static = 1;
+
+        }
 
 
-        particles = new Particle[numberOfParticles];
+        Triangle[] tris = Set_Triangles(membrane.GetComponent<MeshFilter>().mesh);
+        Vertex[] vertexes = Set_Vertices(membrane.GetComponent<MeshFilter>().mesh);
+
+        TRIANGLES = new ComputeBuffer(tris.Length, Marshal.SizeOf(typeof(Triangle)));
+        VERTICES = new ComputeBuffer(vertexes.Length, Marshal.SizeOf(typeof(Vertex)));
+
+        TRIANGLES.SetData(tris);
+        VERTICES.SetData(vertexes);
+
+
+
+        int UpdateKernel = computeShader.FindKernel("Update");
+        computeShader.SetBuffer(UpdateKernel,"TRIANGLES", TRIANGLES);
+        computeShader.SetBuffer(UpdateKernel,"VERTICES", VERTICES);
+
+       
+
+        // Add the corresponding buffers
+        // dont forget to adjust the particle index number of the vertex!
+
+
+
+        particles = new Particle[numberOfParticles + memParticles.Length];
+
+        for(int i = 0; i<memParticles.Length;i++)
+        {
+            particles[i] = memParticles[i];
+        }
 
         PARTICLES = new ComputeBuffer(particles.Length, Marshal.SizeOf(typeof(Particle)));
         PARTICLES.SetData(particles);
@@ -205,6 +325,15 @@ public class ParticleSystem : MonoBehaviour
         computeShader.SetBuffer(initParticlesKernel, "PARTICLES", PARTICLES);
         computeShader.SetFloat( "PARTICLE_RADIUS", particleRadius);
         computeShader.Dispatch(initParticlesKernel,groupsX,1,1);
+
+        // cellCount = new int[particles.Length];
+        // cellTracker = new int[cellCount.Length];
+
+        //  CELLTRACKER = new ComputeBuffer(cellTracker.Length, sizeof(int));
+        //     CELLTRACKER.SetData(cellTracker);
+
+        //     CELLCOUNT = new ComputeBuffer(cellCount.Length, sizeof(int));
+        //     CELLCOUNT.SetData(cellCount);
       
 
 
@@ -250,20 +379,21 @@ public class ParticleSystem : MonoBehaviour
 
 
             
-
+            // ============ INVESTIGATE: MOST LIKELY CULPRIT FOR GC ======================
+            // ============ performance gets worse with more particles 
             //cellCount = new int[xDim*yDim*zDim];
-            cellCount = new int[particles.Length];
-            cellTracker = new int[cellCount.Length];
+            // cellCount = new int[particles.Length];
+            // cellTracker = new int[cellCount.Length];
           
 
-            if(CELLCOUNT != null) CELLCOUNT.Release();
-            if(CELLTRACKER != null) CELLTRACKER.Release();
+            // if(CELLCOUNT != null) CELLCOUNT.Release();
+            // if(CELLTRACKER != null) CELLTRACKER.Release();
 
-            CELLTRACKER = new ComputeBuffer(cellTracker.Length, sizeof(int));
-            CELLTRACKER.SetData(cellTracker);
+            // CELLTRACKER = new ComputeBuffer(cellTracker.Length, sizeof(int));
+            // CELLTRACKER.SetData(cellTracker);
 
-            CELLCOUNT = new ComputeBuffer(cellCount.Length, sizeof(int));
-            CELLCOUNT.SetData(cellCount);
+            // CELLCOUNT = new ComputeBuffer(cellCount.Length, sizeof(int));
+            // CELLCOUNT.SetData(cellCount);
 
             
             if(disp_clearGrid)      DispatchClearGrid();
@@ -713,6 +843,7 @@ public class ParticleSystem : MonoBehaviour
         if(PARTICLE_MAP!= null) PARTICLE_MAP.Release();
         if(CELLCOUNT!= null) CELLCOUNT.Release();
         if(CELLTRACKER!= null) CELLTRACKER.Release();
+        if(membraneVerts!= null) membraneVerts.Release();
     }
 
   //SetUpBillboardShader
@@ -803,6 +934,196 @@ public class ParticleSystem : MonoBehaviour
     return h;
 }
 
+    Mesh Generate_Membrane(float h, int resolution){
+
+        // x,y resolution of box
+        // membrane should be fixed to the box
+        Mesh m = new Mesh();
+
+        Vector3 dims = domain.transform.localScale;
+        Vector3 origin = domain.transform.position - dims/2;
+
+        Vector3 gridDims = dims/resolution;
+
+        int xDims = Mathf.RoundToInt(gridDims.x);
+        int yDims = Mathf.RoundToInt(gridDims.y);
+
+        float x_step = dims.x/xDims;
+        float y_step = dims.y/yDims;
+
+        Debug.Log($"Dimensions {xDims} {yDims} {gridDims} {dims} {resolution}");
+
+
+        List<Vector3> verts = new List<Vector3>();
+        List<Vector3> normals = new List<Vector3>();
+        List<int> tris = new List<int>();
+        List<Vector2> uvs = new List<Vector2>();
+
+        
+
+        for(int x = 0; x <= resolution;x++){
+            for(int y = 0;y<=resolution;y++)
+            {
+                verts.Add(origin + new Vector3(x*gridDims.x,UnityEngine.Random.Range(0.8f*h,1.2f*h),y*gridDims.y));
+            }
+        }
+
+        // generate tris
+
+        int yy = 0;
+
+
+     
+
+        
+        for(int y = 0; y < resolution;y++)
+        {
+
+            for(int x = 0; x< resolution;x++)
+            {
+
+          
+
+                //tri 1:
+                int a = y*(resolution+1) + x;
+                int b = y*(resolution+1) + x + 1;
+                int c = (y+1)*(resolution+1) + x + 1;
+                int d = (y+1)*(resolution+1) + x; //!!!!!!!!!! equals b for some reason.v v
+
+                tris.Add(a);
+                tris.Add(b);
+                tris.Add(c);
+
+           
+
+                tris.Add(a);
+                tris.Add(c);
+                tris.Add(d);
+                
+
+                Debug.Log($"A: {a} B:{b} C:{c} D:{d} X: {x} Y:{y}");
+
+
+                 
+                 }
+
+
+
+           
+        }
+        
+        foreach(var p in tris)
+        {Debug.Log(p);}
+        m.vertices = verts.ToArray();
+        m.triangles= tris.ToArray();
+
+
+        return m;
+    }
+
+    Vector3[] Convert_Vertices_To_Local(Vector3[] verts, Transform transform)
+    {
+        Vector3[] converted = new Vector3[verts.Length];
+
+        for(int i = 0; i< verts.Length;i++)
+        {
+
+            converted[i] = transform.InverseTransformPoint(verts[i]);
+        }
+
+        return converted;
+
+    }
+
+    Triangle[] Set_Triangles(Mesh mesh)
+    {
+        List<Triangle> tris = new List<Triangle>();
+        Vector3[] verts = mesh.vertices;
+        int[] triangles = mesh.triangles;
+
+        for(int i = 0; i<triangles.Length;i+=3)
+        {
+            Triangle angle = new Triangle();
+            angle.a = triangles[i];
+            angle.b = triangles[i+1];
+            angle.c = triangles[i+2];
+
+            angle.center = (verts[angle.a] + verts[angle.b] + verts[angle.c])/3;
+            angle.normal = Vector3.Cross(verts[angle.c]-verts[angle.a],verts[angle.b] - verts[angle.a]);
+
+            tris.Add(angle);
+        }
+
+        Triangle[] triArray = tris.ToArray();
+
+        return triArray;
+    }
+
+    Vertex[] Set_Vertices(Mesh mesh)
+    {
+        Vertex[] vertices = new Vertex[mesh.vertices.Length];
+
+        int tricount = 0;
+        for(int i = 0; i<mesh.triangles.Length;i+=3){
+            
+        
+            int[] indices = new int[] {mesh.triangles[i], mesh.triangles[i+1],mesh.triangles[i+2]};
+
+            for(int j = 0; j <= 2; j++)
+            {
+                int idx = indices[j];
+                
+                Debug.Log($" vertices Length {vertices.Length} idx is {idx} i is {i}");
+               
+
+                int n = vertices[idx].numberOfTris;
+
+                switch(n){
+
+                    default:
+                    vertices[idx].a = tricount;
+                    break;
+
+                    case 1:
+                    vertices[idx].b = tricount;
+                    break;
+
+                    case 2:
+                    vertices[idx].c = tricount;
+                    break;
+
+                    case 3:
+                    vertices[idx].d = tricount;
+                    break;
+
+                    case 4:
+                    vertices[idx].e = tricount;
+                    break;
+
+                    case 5:
+                    vertices[idx].f = tricount;
+                    break;
+                }
+
+                
+                vertices[idx].pIndex = idx;
+                vertices[idx].numberOfTris +=1;
+            }
+            Debug.Log("============================================================");
+            tricount++;
+
+        }
+
+        return vertices;
+
+
+
+
+    }
+
+
+        
+
 }
 
 public struct Particle
@@ -823,6 +1144,7 @@ public struct Particle
 
     public int hash;
     public int index;
+    public int _static;
    
 
    
@@ -862,3 +1184,22 @@ public struct Connection
 
     // just a distance constraint, if points are farther or closer than a certain value, position will be adjusted
 }
+
+public struct Vertex{
+    
+    public int a,b,c,d,e,f,g;
+    public int numberOfTris;
+
+    public int pIndex;
+}
+
+public struct Triangle{
+
+    public int a,b,c,hash;  //indices of particles forming the triangle
+
+    public Vector3 center; //center position of the triangle;
+    public Vector3 normal; // normal direction of the triangle;
+
+}
+
+

@@ -17,397 +17,25 @@
 #include "SPHkernels.cginc"
 #include "SPHUtility.cginc"
 #include "FluidMaths.hlsl"
+#include "BVH.cginc"
+#include "structs.cginc"
+#include "sph_buffers.cginc"
+#include "collisions_detection.cginc"
+#include "sph_settings.cginc"
 
 
-float pi;
-int NUMTHREADS = 1024;
 
-float3 GRAVITY;
-
-float3 HALF_BOUNDSIZE;
-
-int NUMBER_OF_PARTICLES;
-float PARTICLE_RADIUS;
-
-int CELLOFINTEREST = 0;
-
-float SMOOTHING_RADIUS;
-
-int NUMBEROFCELLS;
-
-int LOWESTCELL;
-int HIGHESTCELL;
-
-float DT;
-
-const float4x4 localToWorld;
-const float4x4 worldToLocal;
-
-
-float STIFFNESS;
-float VISCOSITY;
-
-//Time stepping
-
-float vMax;
-float fMax;
-
-float maxPressure;
 
 interface IForce {
 
     float3 ComputeForce();
 };
 
-struct BoundingBox{
-
-    float3 high;
-    float3 low;
-
-    //AABB should be aligned to world axes
-
-    // Bounding box of object needs to be oriented along the object axis -> RTS matrices.
-};
 
 
-struct Particle 
-{
-    
-    float3 color;
-    float3 position;
-    float3 velocity;
-    float3 offset;
-    float3 predictedPosition;
-
-    float pressure;
-    float density;
-    float radius;
-    float mass;
-
-    int hash;
-    int index;
-    int _static;
-};
-
-struct Vertex{
-
-
-    // Stores indices of associated tris
-    int tris [6];
-    int numberOfTris;
-
-    // stores the index of the particle in the PARTICLE Buffer
-    int particleID;
-};
-
-struct Triangle{
-
-    int a,b,c,hash;
-    float3 center, normal;
-};
-
-struct int36
-{
-    int values [36];
-};
-
-
-struct Connection{
-
-    int p1;
-    int p2;
-};
-
-struct TriangleCollisionInfo{
-
-    
-    float t;
-    float3 normal;
-    float3 contactPoint;
-
-};
-
-RWStructuredBuffer<Particle> PARTICLES;
-RWStructuredBuffer<Particle> MEMBRANE;
-
-RWStructuredBuffer<Vertex> VERTICES;
-RWStructuredBuffer<Triangle> TRIANGLES;
-
-RWStructuredBuffer<Connection> CONNECTIONS;
-
-RWStructuredBuffer<int> GRID_TRACKER;
-RWStructuredBuffer<int> GRID;
-
-RWStructuredBuffer<int> CELLCOUNT;
-RWStructuredBuffer<int> CELLTRACKER;
-RWStructuredBuffer<int> PARTICLEMAP;
-
-RWStructuredBuffer<int> NEIGHBORCELLS;
-
-RWStructuredBuffer<uint2> SPATIALHASH;
 int36 BBOX_TRIANGLES;
 
 
-
-void ResolveCollisions(float3 position, float3 velocity,uint particleIndex)
-{
-	// Transform position/velocity to the local space of the bounding box (scale not included)
-	float3 posLocal = mul(worldToLocal, float4(position, 1)).xyz;
-	float3 velocityLocal = mul(worldToLocal, float4(velocity, 0)).xyz;
-
-	// Calculate distance from box on each axis (negative values are inside box)
-	float3 halfSize = 0.05;
-    halfSize = mul(worldToLocal,float4(halfSize,1)).xyz;
-
-	const float3 edgeDst = HALF_BOUNDSIZE - abs(position);
-
-    float collisionDamping = 0.15f;
-    float mass = ((4*pow(PARTICLE_RADIUS,3)*pi)/(NUMBER_OF_PARTICLES*3))*1000;
-
-	// Resolve collisions
-	if (edgeDst.x <= 0)
-	{
-		position.x = HALF_BOUNDSIZE.x * sign(position.x);
-        
-		velocity.x = -1 * collisionDamping;
-	}
-	if (edgeDst.y <= 0)
-	{
-		position.y = HALF_BOUNDSIZE.y * sign(position.y);
-		velocity.y *= -1 * collisionDamping;
-	}
-	if (edgeDst.z <= 0)
-	{
-		position.z = HALF_BOUNDSIZE.z * sign(position.z);
-		velocity.z *= -1 * collisionDamping;
-	}
-
-    
-
-	// Transform resolved position/velocity back to world space
-	PARTICLES[particleIndex].position = position;
-	PARTICLES[particleIndex].velocity = velocity;
-
-}
-
-float3 Barycentric2Euclidian(float4 tuv, Triangle tri)
-{
-    float3 A = PARTICLES[tri.a].position;
-    float3 B = PARTICLES[tri.b].position;
-    float3 C = PARTICLES[tri.c].position;
-
-    return A*tuv.x + B*tuv.y + C*tuv.z;
-}
-
-
-
-float3 FindClosestPointOnPlane(float3 origin, Triangle tri)
-{
-    float3 ap = origin - PARTICLES[tri.b].position;
-
-    float d = dot(ap,tri.normal);
-
-    
-
-    // Find projection:
-
-    float inv_squared_normal_magnitude = 1/(pow(length(ap),2)+0.000001f);
-
-    float3 projection = inv_squared_normal_magnitude*d*tri.normal;
-    float3 Q = PARTICLES[tri.a].position + projection;
-
-    return origin - Q;
-
-    // misses information regarding if the point lies within the triangle or not
-
-}
-
- float GetDistanceToPlane(float3 origin, Triangle tri)
- {
-
-    float3 P = PARTICLES[tri.a].position;
-    float3 n = tri.normal;
-
-    float3 v = origin - P;
-    float dot_vn = dot(v,n);
-    float inv_squ_mag = 1/pow(length(n),2);
-
-    return dot_vn*inv_squ_mag*n;
- }
-
-bool IntersectTri(float3 origin, float3 dir, Triangle tri, inout float4 info)
-{
-
-
-    
-    
-    float3 direction = dir;
-    
-    // Implement Möller-Trumbore-Intersection-Algorithm
-    // First: if ray is parallel to tri, skip
-
-    
-    float3 edge1 = PARTICLES[tri.b].position - PARTICLES[tri.a].position;
-    float3 edge2 = PARTICLES[tri.c].position - PARTICLES[tri.a].position;
-
-    float3 normal = normalize(cross(edge1,edge2));
-
-    
-
-
-    // float3 edge1 = -HALF_BOUNDSIZE - HALF_BOUNDSIZE;
-    // float edge2 = -HALF_BOUNDSIZE - float3(HALF_BOUNDSIZE.x,HALF_BOUNDSIZE.y,0);
-
-    float3 pVec = cross(direction,edge2);
-    float det = dot(edge1,pVec);
-
-    // check if ray is parallel to plane
-    if(abs(det)<0.00000001f ){
-
-        return false ;
-    }
-
-
-   
-
-    // Find u and determine wether it is inside the triangle
-    float inv_det = 1.0f/det;
-    float3 tVec = origin-PARTICLES[tri.a].position;
-
-
-    float u = inv_det * dot(tVec,pVec);
-
-    if(u < 0.0f || u>1.0f)
-    {
-        return false;
-    }
-
-    
-
-    //find v and determine wether it is inside the triangle
-
-    float3 qVec = cross(tVec,edge1);
-    float v = inv_det*dot(direction,qVec);
-
-    if(v < 0.0f || v > 1.0f)
-    {
-        return false;
-    }
-
-    if(u+v > 1.0f)
-    {return false;}
-
-    float t = inv_det*dot(edge2,qVec);
-
-    if( t + v + u > 1.0f)
-    {
-        return false;
-    }
-
-    // t *= inv_det;
-    // u *= inv_det;
-    // v *= inv_det;
-
-   
-    info.x = (1-u-v); 
-    info.y = u;
-    info.z = v;
-
-    // return the world space point instead
-   
-    
-
-    return true, t;
-
-    
-}
-
-bool isPointOnEdge(float4 info)
-    {
-
-        float tolerance = 1e-10;
-        bool on_edge_AB = (info.x < tolerance) && (info.y >= 0) && (info.y <= 1) && (info.z >= 0) && (info.z <= 1);
-        bool on_edge_BC = (info.y < tolerance) && (info.z >= 0) && (info.z <= 1) && (info.x >= 0) && (info.x <= 1);
-        bool on_edge_CA = (info.z < tolerance) && (info.x >= 0) && (info.x <= 1) && (info.y >= 0) && (info.y <= 1);
-        return on_edge_AB ;
-
-
-    }
-
-bool PointInsideTriangle(float3 p, Triangle tri)
-{
-
-    float sum = 0;
-
-    float3 ap = tri.a-p;
-    float3 bp = tri.b - p;
-    float3 cp = tri.c - p;
-    
-    float angle_a = 1/(cos(dot(ap,bp)/(length(ap)*length(bp))))/pi * 180;
-    float angle_b = 1/(cos(dot(bp,cp)/(length(bp)*length(cp))))/ pi * 180;
-    float angle_c = 1/(cos(dot(cp,ap)/(length(cp)*length(ap))))/ pi * 180;
-
-    if(angle_a + angle_b + angle_c == 360.0f) {return true;}
-    else{return false;}
-
-
-
-
-}
-
-float4 Intersect(Triangle tri, float3 direction, float3 startPos)
-{
-    // Get parametric form of the plane
-    
-    float3 n = tri.normal;
-    
-    float3 a = tri.a;
-
-    float d = -(n.x*a.x + n.y*a.y + n.z*a.z);
-    float3 dir = direction/length(direction);
-    float t = -(n.x*startPos.x + n.y*startPos.y + n.z * startPos.z + d)/ (n.x*dir.x + n.y*dir.y + n.z*dir.z);
-
-
-    float3 P = startPos + t*dir;
-
-    return float4(P,t);
-
-
-    // get line equation
-
-  
-
-    // Find intersection
-
-}
-
-float3 BoundaryReplusionForce(uint particleIndex, float multiplier)
-{
-	// Transform position/velocity to the local space of the bounding box (scale not included)
-	float3 posLocal = mul(worldToLocal, float4(PARTICLES[particleIndex].position, 1)).xyz;
-	float3 velocityLocal = mul(worldToLocal, float4(PARTICLES[particleIndex].velocity, 0)).xyz;
-
-	// Calculate distance from box on each axis (negative values are inside box)
-	const float3 halfSize = 0.5;
-	const float3 edgeDst = halfSize - abs(posLocal);
-    const float dist = sqrt(dot(edgeDst,edgeDst));
-
-    const float3 dir = normalize(edgeDst);
-
-    float3 forceVector = float3(dir.x * sign(posLocal.x), dir.y * sign(posLocal.y),dir.z * sign(posLocal.z)); 
-
-    if(abs(edgeDst.x<= 0.003) || abs(edgeDst.y<= 0.003) ||abs(edgeDst.z<= 0.003 )) {return multiplier *normalize(edgeDst)*1.0f;}
-
-    else 
-    
-    {
-        return float3(0,0,0);
-    }
-    
-
-	
-
-}
 
 [numthreads(512,1,1)]
 void InitParticles(uint3 id: SV_DispatchThreadID)
@@ -415,7 +43,7 @@ void InitParticles(uint3 id: SV_DispatchThreadID)
     if(PARTICLES[id.x]._static == 1)
     {
 
-        PARTICLES[id.x].radius = PARTICLE_RADIUS*2;
+        PARTICLES[id.x].radius = PARTICLE_RADIUS*0.2f;
         PARTICLES[id.x].color = float3(0,1,0);
         return;
     }
@@ -637,36 +265,10 @@ void ComputeDensity(uint3 id: SV_DispatchThreadID)
                     int v = cellID.y;
                     int w = cellID.z;
 
-
-                    // if(u > dimensions.x || v > dimensions.y || w > dimensions.z || u < 0 || v<0|| z < 0 )
-                    // {
-                    //     indices[i] = -1;
-                    // }
-
                     u = (sign(u) == -1) ? 0:min(u,dimensions.x);
                     v = (sign(v) == -1) ? 0:min(v,dimensions.y);
                     w = (sign(w) == -1) ? 0:min(w,dimensions.z);
 
-
-                //   if(cellID.x<0) u = 0;
-                //   if(cellID.x > dimensions.x) u = dimensions.x-1;
-
-                //    if(cellID.y<0) v = 0;
-                //   if(cellID.y > dimensions.y) v = dimensions.y-1;
-
-                //     if(cellID.z<0) w = 0;
-                //   if(cellID.z > dimensions.z) w = dimensions.z-1;
-
-                  
-            // else{
-
-            //     indices[i] = (floor(u * (dimensions.y) *(dimensions.z)) + floor(v*(dimensions.z)) + w);
-                    
-            // }
-                  
-
-                    
-                    
 
                       uint hash = (cellID.x * 92837111) ^ (cellID.y * 689287499) ^ (cellID.z * 2839923481);
                     int h = abs(hash) % NUMBEROFCELLS;
@@ -751,25 +353,13 @@ void ComputeDensity(uint3 id: SV_DispatchThreadID)
     }
 
 
-        // check wether distance to boundary is smaller than smoothing kernel radius
-        // if it is not:
-        //      determine distance to each wall
-        //      assume particles are equal to current particle
-        //      positioned in a tight layer of 2 along the surface
-        //      loop over all ghost particles within smoothing radius
-        //      add density to overall density
-    
-        
-       //if(collision) PARTICLES[id.x].color = float3(1,1,0);
-     
-       
-       //PARTICLES[id.x].position += PARTICLES[id.x].offset;
+      
        PARTICLES[id.x].density = sum + 0.0000001;
-       //PARTICLES[id.x].offset.x = sumOfImpulses;
+      
 
 
        PARTICLES[id.x].pressure = max(STIFFNESS*(PARTICLES[id.x].density - 1000),0);
-       //PARTICLES[id.x].pressure = STIFFNESS*(PARTICLES[id.x].density - 1000);
+ 
 
 
 }
@@ -830,31 +420,7 @@ void ComputeForces(uint3 id: SV_DispatchThreadID)
                     v = (sign(v) == -1) ? 0:min(v,dimensions.y);
                     w = (sign(w) == -1) ? 0:min(w,dimensions.z);
 
-                    //    if(u > dimensions.x || v > dimensions.y || w > dimensions.z || u < 0 || v<0|| z < 0 )
-                    // {
-                    //     indices[i] = -1;
-                    // }
-
-                //   if(cellID.x<0) u = 0;
-                //   if(cellID.x > dimensions.x) u = dimensions.x;
-
-                //    if(cellID.y<0) v = 0;
-                //   if(cellID.y > dimensions.y) v = dimensions.y;
-
-                //    if(cellID.z<0) w = 0;
-                //   if(cellID.z > dimensions.z) w = dimensions.z;
-
-                  
-
-
-                    
-              
-
-            //  else{
-            //       indices[i] = (floor(u * (dimensions.y) *(dimensions.z)) + floor(v*(dimensions.z)) + w);
-
-            //  }
-            
+                   
               
 
                 
@@ -927,7 +493,7 @@ void ComputeForces(uint3 id: SV_DispatchThreadID)
 
             dir = (sqrt(dot(dir,dir)) > 0) ? dir: float3(0,0.01f,0);
            float  dist  = sqrt(dot(dir,dir));
-           if(dist > pow(SMOOTHING_RADIUS,2)) continue;
+           if(dist >SMOOTHING_RADIUS) continue;
 
 
            float3 dirNormalized = dir/dist;
@@ -936,7 +502,7 @@ void ComputeForces(uint3 id: SV_DispatchThreadID)
 
 
            pressureForce    += (PARTICLES[pIDX].mass/PARTICLES[pIDX].density) * pressureMean * SpikeyKernelFirstDerivative(dist, pow(SMOOTHING_RADIUS,1),pi) * dirNormalized;
-           viscosityForce   += (PARTICLES[pIDX].velocity - PARTICLES[id.x].velocity) * WPoly6Kernel(dist,pow(SMOOTHING_RADIUS,1),pi);
+           viscosityForce   += (PARTICLES[pIDX].velocity - PARTICLES[id.x].velocity) * ViscosityKernelLaplacian(dist,SMOOTHING_RADIUS);
 
            
 
@@ -983,19 +549,7 @@ void Update (uint3 id : SV_DispatchThreadID)
      float timestep = 0.001f;
 
     float3 velocity = PARTICLES[id.x].velocity;
-    // if(abs(length(velocity)) > 500)
-    // {
-
-    //     PARTICLES[id.x].radius = 0.09f;
-    //     return;
-    // }
-
-    // if(isnan(position.x) || isnan(position.y) || isnan(position.z))
-    // {
-
-    //     PARTICLES[id.x].radius = 0.09f;
-    //     return;
-    // }
+   
 
     float3 oobCheck = HALF_BOUNDSIZE - abs(position);
     float3 projectedPosition = position + timestep*velocity;
@@ -1046,271 +600,19 @@ void Update (uint3 id : SV_DispatchThreadID)
 
      
      }
-
-
-     float closest_t = 1000000.0f;
-     int collisionTriIndex = -1;
-
-     int projectionTriIndex = -1;
-     float closest_projection = 1000000.0f;
-
-     float3 direction = PARTICLES[id.x].position - position;
-     double directionLength = length(direction);
      
-     
+     stats[0] = vMax;
+     stats[1] = fMax;
+     stats[2] = maxPressure;
 
-     // Vector3 contains collision info: Triangle index, t, and bool
-     float4 info = float4(100,100,100,-1);
-     float4 overlapInfo = info;
-     
-     double contactDistance;
-     float overlapDistance = 100.0f;
-     PARTICLES[id.x].color = float3(0,0,0);
+     MembraneCollisions_Felix(id,position,velocity,timestep);
 
-    //   if(directionLength > PARTICLE_RADIUS)
-    //  {
-    //     PARTICLES[id.x].color = float3(1,0,1);
-    //  }
-
-    bool overlapPointIsInsideTriangle = false;
-
-
-    // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! BVH LOGIC
-
-    //  float3 rayOrigin = /* your ray origin */;
-    // float3 rayDirection = /* your ray direction */;
-    // float hitDistance;
-    // int hitTriangleIndex;
-
-    // if (TraverseBVH(rayOrigin, rayDirection, hitDistance, hitTriangleIndex))
-    // {
-    //     // Ray hit a triangle
-    //     Triangle hitTriangle = _Triangles[hitTriangleIndex];
-    //     // Do something with the hit information...
-    // }
-    // else
-    // {
-    //     // Ray didn't hit any triangle
-    // }
-      
-     // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-
-    // Find Collision
-      for(int i = 0;i<TRIANGLES.Length;i++)
-     {
-       
-        Triangle tri = TRIANGLES[i];
-        
-
-        // Find Collisions during movement
-        // Find Collisions by overlapping particles/Polygon
-
-        
-        // float3 overlap = FindClosestPointOnPlane(PARTICLES[id.x].position,tri);
-        overlapPointIsInsideTriangle = IntersectTri(PARTICLES[id.x].position, tri.normal,tri,overlapInfo);
-        float3 closestPoint = Barycentric2Euclidian(overlapInfo,tri);
-
-        float3 o2cp = PARTICLES[id.x].position - closestPoint;
-        //float od = GetDistanceToPlane(PARTICLES[id.x].position,tri);
-        float od = length(o2cp);
-
-        bool onEdge = isPointOnEdge(info);
-       
-
-        // PARTICLES[id.x].color = (od < PARTICLE_RADIUS) ? float3(1,0,0):float3(0,0,1);
-        // if(od < PARTICLE_RADIUS)
-        // {
-        //     break;
-        // }
-
-        // if(od < PARTICLE_RADIUS)
-        // {
-        //     // move particle out of the way
-        //     PARTICLES[id.x].color = float3(1,0.5f,0.4f);
-            
-        // } 
-        
-        
-       
-       
-
-        
-        bool intersect = IntersectTri(PARTICLES[id.x].position,direction, tri, info);
-        
-
-
-
-        
-       
-        bool overlap_detected = ( overlapPointIsInsideTriangle && od <= PARTICLE_RADIUS) ? true:false;
-       
-    
-        //PARTICLES[id.x].color =(overlapPointIsInsideTriangle) ? float3(1,1,0):float3(0,0,1);
-
-        if(intersect || overlap_detected)
-        {
-
-
-            info = (overlap_detected && intersect) ? overlapInfo:info;
-            PARTICLES[id.x].color = info.xyz;
-            
-           //PARTICLES[id.x].color = (onEdge)? float3(1,0,1):PARTICLES[id.x].color;
-            
-            float3 A,B,C;
-
-            A = PARTICLES[tri.a].position;
-            B = PARTICLES[tri.b].position;
-            C = PARTICLES[tri.c].position;
-
-            float3 contactPoint = info.x * A + info.y*B + info.z*C;
-            // the above operation doesnt work, because if both are true, then the intersect info will be used. It only works in the case, if one or the other is true. if both are true this will result in nonsense.
-            // if both are true, meaning there is a collision with the plane and an overlap, use the overlap distance and reflect the velocity from there. Overlap has priority.
-            
-            float3 overlapVector = contactPoint - PARTICLES[id.x].position;
-            contactDistance = (length(overlapVector) > od) ? length(overlapVector):od;
-            float3 contactVector = PARTICLES[id.x].position - contactPoint;
-
-            
-
-            //PARTICLES[id.x].color = (length(contactVector)< length(PARTICLES[id.x].position - position)) ? float3(1,0,0):float3(0,0,1);
-            // THIS DOESNT MAKE ANY FUCKING SENSE!
-             
-             // if t is closer than position there was a collision.
-
-
-            if(contactDistance < length(velocity*100*timestep) || contactDistance <= PARTICLE_RADIUS)
-            {
-                
-                 closest_t = (contactDistance < closest_t) ? contactDistance:closest_t;
-                 
-                 info.w = 1;
-                 collisionTriIndex = i;
-                
-                 
-                 
-                 
-                 
-            }
-
-            // else if(contactDistance < PARTICLE_RADIUS)
-            // {
-
-            //     info.w = 1;
-            //     collisionTriIndex = 1;
-            //     closest_t = PARTICLE_RADIUS;
-            //     PARTICLES[id.x].color = float3(1,1,0);
-
-            // }
-           
-        }
- 
-     }
-
-
-
-    if(PARTICLES[id.x]._static == 1)
-    {
-        PARTICLES[id.x].color = float3(0,1,0);
-    }
-     // Resolve the collision
-
-
-    //   if( info.x < length(direction) && info.z >=1)
-    //     {
-            
-    //             PARTICLES[id.x].color = float3(1,0,0);
-
-    
-
-    if(info.w > 0)
-    {   
-        //PARTICLES[id.x].color = float3(1,1,0);
-        PARTICLES[id.x].color = float3(1,0,0);
-
-       float3 A,B,C;
-       int a,b,c;
-
-       a = TRIANGLES[collisionTriIndex].a;
-       b = TRIANGLES[collisionTriIndex].b;
-       c = TRIANGLES[collisionTriIndex].c;
-
-       A = PARTICLES[a].position;
-       B = PARTICLES[b].position;
-       C = PARTICLES[c].position;
-
-      
-       //bool intersect = IntersectTri(PARTICLES[id.x].position, direction,TRIANGLES[collisionTriIndex],info);
-        
-        
-
-        float3 contactPoint = info.x * A + info.y*B + info.z*C;
-       
-      
-        float tri_normal = TRIANGLES[collisionTriIndex].normal;
-       float3 R = reflect(velocity, -tri_normal);
-       
-       // To compute the reset position we need to find the length of vector contactPoint-resetPoint.
-       // Find Orthogonal projection of r*n on v by applying: w = (dot(u,v)/ length(v)^2) * v;
-       // v is the vector to be projected on
-       // u is the vector to project
-       
-       float3 vector_v = PARTICLES[id.x].position + closest_t*length(velocity);
-       float ism = 1/pow(length(vector_v),2);
-       float3 projVector= dot(PARTICLE_RADIUS*TRIANGLES[collisionTriIndex].normal,vector_v) * ism + vector_v;
-
-       position = PARTICLES[id.x].position + vector_v - projVector;
-       
-       //position = PARTICLES[id.x].position - tri_normal*PARTICLE_RADIUS;
-
-
-
-
-
-       velocity = R*0.22f;
-       //PARTICLES[id.x]._static = 1;
-
-       // Find closest triangle, find if particle overlaps the triangle. if so, move it in the triangles normal direction
-       
-       
-       
-
-        
-        // position = contactPoint - normalize(velocity)*PARTICLE_RADIUS;
-        
-        
-        
-        
-        
-
-        
-       
-       
-        //position = PARTICLES[id.x].position + (info.x-PARTICLE_RADIUS)*normalize(direction);
-        //velocity = reflect(velocity, TRIANGLES[collisionTriIndex].normal);
-        //velocity = reflect(velocity,TRIANGLES[info.y].normal)*0.14f;
-
-        
-        //Find Overlap
-
-
-        
-       
-        
-        
-    }
-   
-
-           
-
-
-      
+     //ResolveBVHCollisions(id,PARTICLES,velocity,position);
+  
      
      ResolveCollisions(position,velocity,id.x);
-     float distance_ratio = directionLength/(5.0f*PARTICLE_RADIUS);
-     //PARTICLES[id.x].color = float3(overlapRatio,0,1-overlapRatio); 
-
-     // Triangle collisions Naively -> Test against each Triangle
+     //float distance_ratio = directionLength/(5.0f*PARTICLE_RADIUS);
+    
 
      
    

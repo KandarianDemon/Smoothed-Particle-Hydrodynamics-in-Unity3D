@@ -5,6 +5,7 @@ using System;
 using System.Runtime.InteropServices;
 using UnityEditor;
 using System.Linq;
+using TMPro;
 
 [RequireComponent(typeof(MeshRenderer),typeof(MeshFilter))]
 public class ParticleSystem : MonoBehaviour
@@ -56,7 +57,9 @@ public class ParticleSystem : MonoBehaviour
     public float maxPressure;
 
 
-     public PrimitiveType type;
+
+    public PrimitiveType type;
+    public ObjectType oType;
 
 
     
@@ -85,7 +88,8 @@ public class ParticleSystem : MonoBehaviour
 
     public ComputeBuffer quad;
 
-
+    public ComputeBuffer stats;
+    public float[] _stats;
     
 
     public ComputeBuffer CELLCOUNT;
@@ -157,10 +161,19 @@ public class ParticleSystem : MonoBehaviour
         // mesh.RecalculateNormals();
         // memFilter.mesh = mesh;
 
+        if(oType == ObjectType.Primitive){
+
+       
+        
         GameObject cube = GameObject.CreatePrimitive(type);
         cube.transform.localScale = cube.transform.localScale*2.5f;
         cube.name = "Cube";
         cube.transform.position = cube.transform.position + new Vector3(0,2.5f,0);
+        BVHComponent bvhComponent = cube.AddComponent<BVHComponent>();
+        bvhComponent.computeShader = this.computeShader;
+        cube.tag ="Simulation Object";
+
+        // Build compute buffers for BVH. or let the buffers be build on the BVH component.
 
         MeshFilter cubeFilter = cube.GetComponent<MeshFilter>();
         MeshRenderer cubeRenderer = cube.GetComponent<MeshRenderer>();
@@ -189,7 +202,15 @@ public class ParticleSystem : MonoBehaviour
         cubeRenderer.material = memMat;
         memMat.SetBuffer("vertices", membraneVerts);
 
+         }
 
+        else if(oType == ObjectType.Mesh) {
+
+            Debug.Log(" This function provides the possibility to add custom meshes. Needs to be implemented");
+
+            
+
+        }
         
 
 
@@ -259,6 +280,21 @@ public class ParticleSystem : MonoBehaviour
         
     }
 
+    void UpdateGUI(float vMax, float fMax, float pMax)
+    {
+        TMP_Text text = GameObject.Find("ParticleNumber").GetComponent<TMP_Text>();
+        text.SetText(particles.Length.ToString());
+
+        TMP_Text text1 = GameObject.Find("vMax").GetComponent<TMP_Text>();
+        text1.SetText(vMax.ToString());
+
+        TMP_Text text2 = GameObject.Find("fMax").GetComponent<TMP_Text>();
+        text2.SetText(fMax.ToString());
+
+        TMP_Text text3 = GameObject.Find("pMax").GetComponent<TMP_Text>();
+        text3.SetText(pMax.ToString());
+    }
+
     void InitializeParticles()
     {
         
@@ -270,7 +306,12 @@ public class ParticleSystem : MonoBehaviour
         // grab verts of membrane and turn them into a particle Array. Then merge fluid particles and membrane particles.
         // Then tell the init kernel which indices to skip (because here are the membrane vertices)
         
+        
         GameObject membrane = GameObject.Find("Cube");
+        if(membrane != null)
+        {
+
+       
 
         Vector3[] worldVerts = new Vector3[membrane.GetComponent<MeshFilter>().mesh.vertices.Length];
 
@@ -303,6 +344,7 @@ public class ParticleSystem : MonoBehaviour
         int UpdateKernel = computeShader.FindKernel("Update");
         computeShader.SetBuffer(UpdateKernel,"TRIANGLES", TRIANGLES);
         computeShader.SetBuffer(UpdateKernel,"VERTICES", VERTICES);
+        
 
        
 
@@ -317,6 +359,10 @@ public class ParticleSystem : MonoBehaviour
         {
             particles[i] = memParticles[i];
         }
+         }
+         else{
+            particles = new Particle[numberOfParticles];
+         }
 
         PARTICLES = new ComputeBuffer(particles.Length, Marshal.SizeOf(typeof(Particle)));
         PARTICLES.SetData(particles);
@@ -351,12 +397,28 @@ public class ParticleSystem : MonoBehaviour
         return cons;
     }
 
+    public void Run_Pause(){
+        runSimulation = !runSimulation;
+    }
+
+    public void ChangeViewMode(int number)
+    {
+
+        if(number <= 3){
+
+        
+        visMode = number;
+        }
+    }
+
 
     void FixedUpdate()
     {
         if(runSimulation)
         {
-            
+
+            stats.GetData(_stats);
+            UpdateGUI(_stats[0],_stats[1],_stats[2]);
             computeShader.SetInt("LOWESTCELL", numberOfParticles*10);
             computeShader.SetInt("HIGHESTCELL", (int)-1);
             computeShader.SetFloat("SMOOTHING_RADIUS",smoothingRadius);
@@ -447,6 +509,12 @@ public class ParticleSystem : MonoBehaviour
             
             }
         );
+
+        // debug buffer for debugging force,velocity,pressure
+
+            _stats = new float[3]{0,0,0};
+            stats = new ComputeBuffer(1,sizeof(float)*3);
+            computeShader.SetBuffer(computeShader.FindKernel("Update"),"stats",stats);
 
     
         

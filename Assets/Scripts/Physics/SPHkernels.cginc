@@ -134,12 +134,15 @@ float StdKernel(float distanceSquared, float r, float pi)
 }
 
 
- float ViscosityKernelLaplacian(float r, float h, float pi)
+ float ViscosityKernelLaplacian(float r, float h)
 {
-  if(r >= 0 && r <= h)
-    {
-        return (15.0f/2*pi*(h*h*h)) * ((8*h - 9*r)/2*(h*h*h));
-    }
   
-  return 0;
+    if (r <= h)
+    {
+        float h3 = h * h * h;
+        float h6 = h3 * h3;
+        return 0.0001f*(45.0f / (3.14159265359f * h6) * (h - r));
+    }
+    return 0.0f;
+
 }

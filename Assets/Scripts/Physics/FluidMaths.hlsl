@@ -62,6 +62,18 @@ float DerivativeSpikyPow2(float dst, float radius)
 	return 0;
 }
 
+float ViscosityKernel2(float dst, float radius)
+{
+    if (dst < radius)
+    {
+        float scale = 45.0f / (PI * pow(radius, 6));
+        return scale * (radius - dst);
+    }
+    return 0;
+}
+
+
+
 float DensityKernel(float dst, float radius)
 {
 	//return SmoothingKernelPoly6(dst, radius);

@@ -1,12 +1,16 @@
-yx using UnityEngine;
+using UnityEngine;
 using System.Collections.Generic;
+using System;
 
 public class BVHNode
 {
     public Bounds bounds;
     public BVHNode left;
     public BVHNode right;
-    public int triangleIndex; // Leaf nodes will have a valid index, internal nodes will have -1
+    public int triangleIndex_A; // Leaf nodes will have a valid index, internal nodes will have -1
+    public int triangleIndex_B;
+    public int triangleIndex_C;
+    public int triangleIndex_D;
 
     public bool IsLeaf() { return left == null && right == null; }
 }
@@ -16,17 +20,42 @@ public class BVHComponent : MonoBehaviour
     private BVHNode root;
     private List<Vector3> vertices;
     private List<int> triangles;
+    private int max_depth;
 
     [SerializeField] private int maxTrianglesPerLeaf = 2;
     [SerializeField] private bool visualizeBounds = true;
 
+    ComputeBuffer nodeBuffer;
+    ComputeBuffer triangleBuffer;
+
+    public ComputeShader computeShader;
+
     private void Start()
     {
         BuildBVH();
+        Debug.Log($" Maximum Depth of the BVH {FindMaxDepth(root)}");
+        CreateBuffers();
+        // List<BVHNodeData> nodeDataList = new List<BVHNodeData>();
+
+        // FlattenBVHTree(root,nodeDataList);
+        // Debug.Log($" The tree contains {nodeDataList.Count} nodes!");
+    }
+
+    private void Update()
+    {
+        if(this.transform.hasChanged)
+        {
+            
+            BuildBVH();
+           
+            
+            transform.hasChanged = false;
+        }
     }
 
     public void BuildBVH()
     {
+        DateTime start = DateTime.Now;
         MeshFilter meshFilter = GetComponent<MeshFilter>();
         if (meshFilter == null || meshFilter.sharedMesh == null)
         {
@@ -44,20 +73,60 @@ public class BVHComponent : MonoBehaviour
             Vector3 v1 = transform.TransformPoint(vertices[triangles[i]]);
             Vector3 v2 = transform.TransformPoint(vertices[triangles[i + 1]]);
             Vector3 v3 = transform.TransformPoint(vertices[triangles[i + 2]]);
-            bvhTriangles.Add(new BVHTriangle(v1, v2, v3, i / 3));
+            bvhTriangles.Add(new BVHTriangle(v1, v2, v3, Mathf.RoundToInt(i / 3)));
         }
 
-        root = BuildBVHRecursive(bvhTriangles);
+         root = BuildBVHRecursive(bvhTriangles);
+         DateTime end = DateTime.Now;
+         Debug.Log($"This function took {(end-start).TotalSeconds} seconds to perform!");
     }
 
     private BVHNode BuildBVHRecursive(List<BVHTriangle> triangles)
     {
         BVHNode node = new BVHNode();
+        node.triangleIndex_A = -1;
+        node.triangleIndex_B = -1;
+        node.triangleIndex_C = -1;
+        node.triangleIndex_D = -1;
+
+
         node.bounds = CalculateBounds(triangles);
 
         if (triangles.Count <= maxTrianglesPerLeaf)
         {
-            node.triangleIndex = triangles[0].index;
+           
+
+            node.triangleIndex_A = 1;
+            // if(triangles.Count == 1)
+            // {
+            //     node.triangleIndex_A = triangles[0].index;
+            // }
+
+            //  if(triangles.Count == 2)
+            // {
+            //     node.triangleIndex_A = triangles[0].index;
+            //     node.triangleIndex_B = triangles[1].index;
+            // }
+
+            //  if(triangles.Count == 3)
+            // {
+            //     node.triangleIndex_A = triangles[0].index;
+            //     node.triangleIndex_B = triangles[1].index;
+            //     node.triangleIndex_C = triangles[2].index;
+            // }
+
+            //  if(triangles.Count == 4)
+            // {
+            //     node.triangleIndex_A = triangles[0].index;
+            //     node.triangleIndex_B = triangles[1].index;
+            //     node.triangleIndex_C = triangles[2].index;
+            //     node.triangleIndex_D = triangles[3].index;
+
+            // }
+            
+            
+            
+            
             return node;
         }
 
@@ -119,12 +188,171 @@ public class BVHComponent : MonoBehaviour
 
     private void DrawBVHNode(BVHNode node)
     {
+
+        if(node.IsLeaf())
+        {
         Gizmos.color = node.IsLeaf() ? Color.green : Color.yellow;
         Gizmos.DrawWireCube(node.bounds.center, node.bounds.size);
+        }
 
         if (node.left != null) DrawBVHNode(node.left);
         if (node.right != null) DrawBVHNode(node.right);
     }
+
+    private void CreateBuffers()
+    {
+        if(computeShader == null)
+        {
+            Debug.LogError("Compute Shader is not set!");
+            return;
+        }
+
+         if (root == null)
+        {
+            Debug.LogError("BVH not built. Call BuildBVH() first.");
+            return;
+        }
+
+        List<BVHNodeData> nodeDataList = new List<BVHNodeData>();
+        FlattenBVHTree(root, nodeDataList);
+
+        
+        
+
+        nodeBuffer = new ComputeBuffer(nodeDataList.Count, sizeof(float) * 6 + sizeof(int) * 6);
+        nodeBuffer.SetData(nodeDataList.ToArray());
+
+        // Create triangle buffer
+        List<TriangleData> triangleDataList = new List<TriangleData>();
+        for (int i = 0; i < triangles.Count; i += 3)
+        {
+            triangleDataList.Add(new TriangleData
+            {
+                a = triangles[i],
+                b = triangles[i + 1],
+                c = triangles[i + 2]
+            });
+        }
+
+        triangleBuffer = new ComputeBuffer(triangleDataList.Count, sizeof(int) * 6);
+        triangleBuffer.SetData(triangleDataList);
+
+        // Set buffers to your compute shader
+        int kernelHandle = computeShader.FindKernel("Update");
+        computeShader.SetBuffer(kernelHandle, "_BVHNodes", nodeBuffer);
+        computeShader.SetBuffer(kernelHandle, "_Triangles", triangleBuffer);
+
+
+        // Creates the BVHNode buffer. And maybe the triangle buffer. triangles and vertices should be added to the particle world
+
+    }
+
+    private void ReleaseBuffer()
+    {
+
+        if (nodeBuffer != null)
+        {
+            nodeBuffer.Release();
+            nodeBuffer = null;
+        }
+        
+        if (triangleBuffer != null)
+        {
+            triangleBuffer.Release();
+            triangleBuffer = null;
+        }
+    }
+
+    private void DestroyBuffer()
+    {
+
+        ReleaseBuffer();
+
+        if (nodeBuffer != null)
+        {
+            nodeBuffer.Dispose();
+            nodeBuffer = null;
+        }
+
+        if (triangleBuffer != null)
+        {
+            triangleBuffer.Dispose();
+            triangleBuffer = null;
+        }
+    }
+
+    private void RecalculateBVH()
+    {
+        // recalculates the buffers if something changed
+        ReleaseBuffer();
+        BuildBVH();
+        CreateBuffers();
+    }
+
+    private void FlattenBVHTree(BVHNode node, List<BVHNodeData> nodeDataList)
+    {
+
+       int index = nodeDataList.Count;
+        
+        BVHNodeData nodeData = new BVHNodeData
+        {
+            min = node.bounds.min,
+            max = node.bounds.max,
+            leftChild = node.left != null ? index+ 1 : -1,
+            rightChild = node.right != null ? index + 2 : -1,
+
+            triangleIndex_A = node.triangleIndex_A,
+            triangleIndex_B = node.triangleIndex_B,
+            triangleIndex_C = node.triangleIndex_C,
+            triangleIndex_D = node.triangleIndex_D,
+
+        };
+
+        nodeDataList.Add(nodeData);
+
+        if (node.left != null)
+            FlattenBVHTree(node.left, nodeDataList);
+        if (node.right != null)
+            FlattenBVHTree(node.right, nodeDataList);
+
+        
+
+        
+    }
+
+    public static int FindMaxDepth(BVHNode node)
+{
+    // Base case: leaf node
+    if (node.IsLeaf())
+    {
+        return 0;
+    }
+
+    // Recursive case: internal node
+    int leftDepth = FindMaxDepth(node.left);
+    int rightDepth = FindMaxDepth(node.right);
+
+    // Return the maximum depth of the two subtrees plus one for the current node
+    return Math.Max(leftDepth, rightDepth) + 1;
+}
+
+    private struct BVHNodeData
+    {
+        public Vector3 min;
+        public Vector3 max;
+        public int leftChild;
+        public int rightChild;
+        public int triangleIndex_A;
+        public int triangleIndex_B;
+        public int triangleIndex_C;
+        public int triangleIndex_D;
+    }
+
+        private struct TriangleData
+    {
+        public int a, b, c;
+    }
+
 }
 
 public class BVHTriangle
@@ -145,6 +373,8 @@ public class BVHTriangle
         return (v1 + v2 + v3) / 3f;
     }
 }
+
+ 
 
 
 

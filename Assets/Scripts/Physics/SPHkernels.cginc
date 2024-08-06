@@ -1,3 +1,6 @@
+#ifndef SPH_KERNELS_INCLUDED
+#define SPH_KERNELS_INCLUDED
+
 float SpikeyKernel(float r, float h, float pi)
 {
 
@@ -141,8 +144,10 @@ float StdKernel(float distanceSquared, float r, float pi)
     {
         float h3 = h * h * h;
         float h6 = h3 * h3;
-        return 0.0001f*(45.0f / (3.14159265359f * h6) * (h - r));
+        return 0.01f*(45.0f / (3.14159265359f * h6) * (h - r));
     }
     return 0.0f;
 
 }
+
+#endif

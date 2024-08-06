@@ -22,7 +22,8 @@
 #include "sph_buffers.cginc"
 #include "collisions_detection.cginc"
 #include "sph_settings.cginc"
-
+#include "integrators.cginc"
+#include "boundary_handling.cginc"
 
 
 
@@ -97,18 +98,6 @@ void GridUpdate (uint3 id: SV_DispatchThreadID)
    
     InterlockedAdd(CELLCOUNT[idCell],1u);
 
-    // PARTICLES[id.x].color = float3((PARTICLES[id.x].position.x),
-    //                                (PARTICLES[id.x].position.y),
-    //                                (PARTICLES[id.x].position.z));
-    // if(id.x == 0) {
-    //     PARTICLES[id.x].color = float3(0,0,1);
-    //     PARTICLES[id.x].radius =2*SMOOTHING_RADIUS;
-    //     }
-
-    //     else{ PARTICLES[id.x].color = float3(.3,0,0);}
-
-
-    //if(idCell == CELLOFINTEREST) PARTICLES[id.x].color = float3(0,1,0);
  
  
    
@@ -350,6 +339,9 @@ void ComputeDensity(uint3 id: SV_DispatchThreadID)
            
            
         }
+
+
+        // Check if a boundary is near
     }
 
 
@@ -489,7 +481,7 @@ void ComputeForces(uint3 id: SV_DispatchThreadID)
 
            float3 dir   = PARTICLES[id.x].predictedPosition - PARTICLES[pIDX].predictedPosition ;
             if(dot(dir,dir) > pow(SMOOTHING_RADIUS,2)) continue;
-            float3 edgeDistance = HALF_BOUNDSIZE - abs(PARTICLES[id.x].position.x);
+            //float3 edgeDistance = HALF_BOUNDSIZE - abs(PARTICLES[id.x].position.x);
 
             dir = (sqrt(dot(dir,dir)) > 0) ? dir: float3(0,0.01f,0);
            float  dist  = sqrt(dot(dir,dir));
@@ -500,8 +492,11 @@ void ComputeForces(uint3 id: SV_DispatchThreadID)
 
            float pressureMean =  (PARTICLES[id.x].pressure + PARTICLES[pIDX].pressure)/2.0f;
 
+           
+
 
            pressureForce    += (PARTICLES[pIDX].mass/PARTICLES[pIDX].density) * pressureMean * SpikeyKernelFirstDerivative(dist, pow(SMOOTHING_RADIUS,1),pi) * dirNormalized;
+          
            viscosityForce   += (PARTICLES[pIDX].velocity - PARTICLES[id.x].velocity) * ViscosityKernelLaplacian(dist,SMOOTHING_RADIUS);
 
            
@@ -518,10 +513,11 @@ void ComputeForces(uint3 id: SV_DispatchThreadID)
         //if(length(pressureForce) > maxPressure) {pressureForce = float3(0,0,0);}
         
 
+        const float3 edgeDst = (HALF_BOUNDSIZE - PARTICLE_RADIUS+0.01f) - position;
+        
 
-
-
-        PARTICLES[id.x].offset =  -(pressureForce/PARTICLES[id.x].density) + VISCOSITY*viscosityForce;
+        float3 LJ_force = LennardJonesForce(edgeDst,-EPSILON,PARTICLE_RADIUS*2.0f,PARTICLES[id.x].mass);
+        PARTICLES[id.x].offset =  -(pressureForce/PARTICLES[id.x].density) + VISCOSITY*viscosityForce + LJ_force ;
 
         if(length(PARTICLES[id.x].offset) > fMax) fMax = length(PARTICLES[id.x].offset);
        
@@ -587,19 +583,26 @@ void Update (uint3 id : SV_DispatchThreadID)
     
      
 
-     for(int i = 0; i<100; i++)
-     {
+    //  for(int i = 0; i<100; i++)
+    //  {
 
      
-     velocity = velocity +pressureForce + GRAVITY/1.0f*timestep ;
-     position = PARTICLES[id.x].position + velocity * timestep;
+    // //  velocity = velocity +pressureForce + GRAVITY/1.0f*timestep ;
+    // //  position = PARTICLES[id.x].position + velocity * timestep;
 
-     
+    //  //EulerIntegration(PARTICLES[id.x].position,position, velocity,pressureForce,timestep);
+    //  //VerletIntegration(PARTICLES[id.x].position,position,velocity,pressureForce,timestep);
     
     
 
      
-     }
+    //  }
+     
+     //VerletIntegration(PARTICLES[id.x].position,position,velocity,pressureForce,timestep*20.0f);
+     SemiImplicitEuler(position,velocity,pressureForce,timestep*10.0f);
+     //velocity += AddBoundaryRepulsion(position,1000.0f,PARTICLE_RADIUS*2.0f,PARTICLES[id.x].mass)*timestep;
+     //EulerIntegration(PARTICLES[id.x].position,position, velocity,pressureForce,timestep*10.0f);
+
      
      stats[0] = vMax;
      stats[1] = fMax;
@@ -609,8 +612,12 @@ void Update (uint3 id : SV_DispatchThreadID)
 
      //ResolveBVHCollisions(id,PARTICLES,velocity,position);
   
-     
+     //AddBoundaryRepulsion(position,velocity,timestep*10.0f,PARTICLE_RADIUS,10.0f,PARTICLE_RADIUS*2.0f);
+     //
      ResolveCollisions(position,velocity,id.x);
+    
+
+     
      //float distance_ratio = directionLength/(5.0f*PARTICLE_RADIUS);
     
 

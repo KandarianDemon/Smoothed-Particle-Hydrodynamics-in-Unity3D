@@ -28,6 +28,7 @@ const float4x4 worldToLocal;
 
 float STIFFNESS;
 float VISCOSITY;
+float EPSILON;
 
 //Time stepping
 

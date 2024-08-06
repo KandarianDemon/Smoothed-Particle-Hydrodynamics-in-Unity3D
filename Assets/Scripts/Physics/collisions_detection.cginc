@@ -3,6 +3,85 @@
 
 #include "sph_buffers.cginc"
 #include "sph_settings.cginc"
+#include "boundary_handling.cginc"
+
+// Pseudo-random number generation (example using a simple hash function)
+
+uint MurmurHash(uint seed) {
+    const uint m = 0xc6a4a793; // Magic constant
+    const int r = 15;          // Mix bits
+    const uint n = 13;         // Final mix (integer truncation)
+
+    uint h = seed ^ m; // Initialize hash to seed
+
+    // Mix 4-byte chunks of the seed
+    for (int i = 0; i < 4; ++i) {
+        uint k = (h & 0xffffffff) << r | (h >> (32 - r)); // Bitwise rotation
+        h = h ^ k; // XOR mix
+        h = h * m; // Addition
+        h = h ^ (k >> 16); // Final mix
+    }
+
+    // Handle the last few bytes of the input
+    const uint c = 0xc5a926f7; // Constant
+    h = h ^ c; // XOR mix
+    h = h * m; // Addition
+    h = h ^ (c >> 16); // Final mix
+
+    // Truncate to 32 bits
+    h = h >> n;
+
+    return h;
+}
+uint Hash(uint seed) {
+    return uint(MurmurHash(seed) % 4294967295u);
+}
+
+// Normalizes a vector
+float3 Normalize(float3 v) {
+    return v / length(v);
+}
+
+// Rotates a vector by a given angle around an axis
+float3 RotateVector(float3 vec, float angle) {
+    float c = cos(angle);
+    float s = sin(angle);
+    float3x3 m = float3x3(
+        c + (1 - c) * vec.x * vec.x,
+        (1 - c) * vec.x * vec.y - s * vec.z,
+        (1 - c) * vec.x * vec.z + s * vec.y,
+        (1 - c) * vec.y * vec.x + s * vec.z,
+        c + (1 - c) * vec.y * vec.y,
+        (1 - c) * vec.y * vec.z - s * vec.x,
+        (1 - c) * vec.z * vec.x + s * vec.y,
+        (1 - c) * vec.z * vec.y - s * vec.x,
+        c + (1 - c) * vec.z * vec.z
+    );
+    return mul(m, vec);
+}
+
+float3 PerturbDirection(float3 direction, float maxPerturbationAngle) {
+    // Generate a random orthogonal vector
+    float3 orthogonal = Normalize(cross(direction, float3(0, 1, 0)));
+    
+    // Generate a random angle within [-maxPerturbationAngle, maxPerturbationAngle]
+    float randomAngle = ((Hash((uint)direction.x) % 65536u) - 32768u) / 32767.0f * 2.0f * maxPerturbationAngle - maxPerturbationAngle;
+    
+    // Rotate the orthogonal vector by the random angle
+    float3 rotatedOrthogonal = RotateVector(orthogonal, randomAngle);
+    
+    // Project the direction onto the rotated orthogonal vector
+    float projection = dot(direction, rotatedOrthogonal);
+    
+    // Calculate the perturbation vector
+    float3 perturbation = Normalize(rotatedOrthogonal) * projection;
+    
+    // Return the original direction plus the perturbation
+    return Normalize(direction + perturbation);
+}
+
+
+
 
 void ResolveCollisions(float3 position, float3 velocity,uint particleIndex)
 {
@@ -14,9 +93,9 @@ void ResolveCollisions(float3 position, float3 velocity,uint particleIndex)
 	float3 halfSize = 0.05;
     halfSize = mul(worldToLocal,float4(halfSize,1)).xyz;
 
-	const float3 edgeDst = (HALF_BOUNDSIZE - PARTICLE_RADIUS+0.001f) - abs(position);
+	const float3 edgeDst = (HALF_BOUNDSIZE - PARTICLE_RADIUS+0.01f) - abs(position);
 
-    float collisionDamping = 0.45f;
+    float collisionDamping = 0.99f;
     float mass = ((4*pow(PARTICLE_RADIUS,3)*pi)/(NUMBER_OF_PARTICLES*3))*1000;
 
 	// Resolve collisions
@@ -24,7 +103,7 @@ void ResolveCollisions(float3 position, float3 velocity,uint particleIndex)
 	{
 		position.x = HALF_BOUNDSIZE.x * sign(position.x) + sign(position.x)*-1*PARTICLE_RADIUS ;
         
-		velocity.x = -1 * collisionDamping;
+		velocity.x *= -1 * collisionDamping;
 	}
 	if (edgeDst.y <= 0)
 	{
@@ -34,8 +113,16 @@ void ResolveCollisions(float3 position, float3 velocity,uint particleIndex)
 	if (edgeDst.z <= 0)
 	{
 		position.z = HALF_BOUNDSIZE.z * sign(position.z) + sign(position.z)*-1*PARTICLE_RADIUS;
-		velocity.z *= -1 * collisionDamping;
+		velocity.z *= -1 *collisionDamping;
 	}
+    
+    Particle virtualParticles[150];
+
+    int count = GenerateVirtualParticles(virtualParticles,SMOOTHING_RADIUS,PARTICLE_RADIUS,PARTICLES[particleIndex],float3(edgeDst.x,0,0),length(edgeDst));
+
+    if(count > 0){
+        PARTICLES[particleIndex].color = float3(0,1,0);
+    }
 
     
 
@@ -45,6 +132,42 @@ void ResolveCollisions(float3 position, float3 velocity,uint particleIndex)
 
 }
 
+
+float LennardJonesPotential(float r, float epsilon, float sigma) {
+    float sr = r / sigma;
+    return 4.0 * epsilon * (pow(sr, -12) - pow(sr, -6));
+}
+
+float3 LennardJonesForce(float3 r, float epsilon, float sigma, float mass) {
+    float rMag = length(r);
+    float sr = rMag / sigma;
+    float potentialEnergy = LennardJonesPotential(rMag, epsilon, sigma);
+    // Correct the force magnitude calculation
+    //float forceMagnitude = -24.0 * epsilon * ((pow(sigma / rMag, 12) - pow(sigma / rMag, 6)) * (-sigma / (rMag * rMag)));
+    return normalize(r) * potentialEnergy*mass;
+}
+
+float3 AddBoundaryRepulsion(float3 position,float epsilon, float sigma,float mass)
+{
+    // Calculate distances to each boundary
+
+    const float3 edgeDst = (HALF_BOUNDSIZE - PARTICLE_RADIUS+0.01f) - abs(position);
+    float polarity = sign(position);
+
+    float3 repulsionForce;
+
+    repulsionForce.x = LennardJonesForce(float3(edgeDst.x,0,0), epsilon,sigma,mass) * polarity;
+    repulsionForce.y = LennardJonesForce(float3(0,edgeDst.y,0), epsilon,sigma,mass) * polarity;
+    repulsionForce.z = LennardJonesForce(float3(0,0,edgeDst.z), epsilon,sigma,mass) * polarity;
+
+    return repulsionForce;
+    
+}
+
+
+
+
+
 float3 Barycentric2Euclidian(float4 tuv, Triangle tri)
 {
     float3 A = PARTICLES[tri.a].position;
@@ -53,6 +176,8 @@ float3 Barycentric2Euclidian(float4 tuv, Triangle tri)
 
     return A*tuv.x + B*tuv.y + C*tuv.z;
 }
+
+
 
 
 
@@ -439,13 +564,14 @@ void MembraneCollisions_Felix(uint3 id,inout float3 position,inout float3 veloci
        
        //position = PARTICLES[id.x].position - tri_normal*PARTICLE_RADIUS;
 
-       position = PARTICLES[id.x].position - tri_normal*PARTICLE_RADIUS*2.0f;
+         position = PARTICLES[id.x].position - tri_normal*PARTICLE_RADIUS*3.0f;
+        //position = contactPoint + tri_normal*PARTICLE_RADIUS;
 
 
 
 
 
-       velocity = R*0.12f;
+       velocity = R*0.5f;
        
         
        

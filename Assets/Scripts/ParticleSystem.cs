@@ -74,6 +74,8 @@ public class ParticleSystem : MonoBehaviour
     public float stiffness;
     public float dynamicViscosity;
     public float particleRadius;
+    [Range(0.001f,1000.0f)]
+    public float lj_epsilon;
 
     int maxParticles;
 
@@ -428,6 +430,8 @@ public class ParticleSystem : MonoBehaviour
             computeShader.SetFloat("DT",Time.deltaTime);
             computeShader.SetMatrix("localToWorld", transform.localToWorldMatrix);
             computeShader.SetMatrix("worldToLocal", transform.worldToLocalMatrix);
+
+            computeShader.SetFloat("EPSILON", lj_epsilon);
             
 
             computeShader.SetVector("HALF_BOUNDSIZE", domain.GetComponent<GLLines>().GetDimensions()/2);

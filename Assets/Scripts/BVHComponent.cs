@@ -30,6 +30,8 @@ public class BVHComponent : MonoBehaviour
 
     public ComputeShader computeShader;
 
+    public int numberOfNodes;
+
     private void Start()
     {
         BuildBVH();
@@ -96,39 +98,42 @@ public class BVHComponent : MonoBehaviour
         {
            
 
-            node.triangleIndex_A = 1;
-            // if(triangles.Count == 1)
-            // {
-            //     node.triangleIndex_A = triangles[0].index;
-            // }
+           
+            if(triangles.Count == 1)
+            {
+                node.triangleIndex_A = triangles[0].index;
+            }
 
-            //  if(triangles.Count == 2)
-            // {
-            //     node.triangleIndex_A = triangles[0].index;
-            //     node.triangleIndex_B = triangles[1].index;
-            // }
+             if(triangles.Count == 2)
+            {
+                node.triangleIndex_A = triangles[0].index;
+                node.triangleIndex_B = triangles[1].index;
+            }
 
-            //  if(triangles.Count == 3)
-            // {
-            //     node.triangleIndex_A = triangles[0].index;
-            //     node.triangleIndex_B = triangles[1].index;
-            //     node.triangleIndex_C = triangles[2].index;
-            // }
+             if(triangles.Count == 3)
+            {
+                node.triangleIndex_A = triangles[0].index;
+                node.triangleIndex_B = triangles[1].index;
+                node.triangleIndex_C = triangles[2].index;
+            }
 
-            //  if(triangles.Count == 4)
-            // {
-            //     node.triangleIndex_A = triangles[0].index;
-            //     node.triangleIndex_B = triangles[1].index;
-            //     node.triangleIndex_C = triangles[2].index;
-            //     node.triangleIndex_D = triangles[3].index;
+             if(triangles.Count == 4)
+            {
+                node.triangleIndex_A = triangles[0].index;
+                node.triangleIndex_B = triangles[1].index;
+                node.triangleIndex_C = triangles[2].index;
+                node.triangleIndex_D = triangles[3].index;
 
-            // }
+            }
             
             
             
-            
+            numberOfNodes++;
             return node;
         }
+
+        
+
 
         List<BVHTriangle> leftTriangles = new List<BVHTriangle>();
         List<BVHTriangle> rightTriangles = new List<BVHTriangle>();
@@ -155,6 +160,7 @@ public class BVHComponent : MonoBehaviour
         node.left = BuildBVHRecursive(leftTriangles);
         node.right = BuildBVHRecursive(rightTriangles);
 
+        numberOfNodes++;
         return node;
     }
 
@@ -213,14 +219,33 @@ public class BVHComponent : MonoBehaviour
             return;
         }
 
+        
         List<BVHNodeData> nodeDataList = new List<BVHNodeData>();
-        FlattenBVHTree(root, nodeDataList);
+        
+        BVHNodeData[] nodeDataArray = new BVHNodeData[numberOfNodes];
+        //FlattenBVHTree(root, nodeDataList,0);
+
+        int top = 0;
+        Debug.Log($"The Tree contains {nodeDataArray.Length} nodes!");
+        FlattenBVHTree(root,nodeDataArray,ref top,0);
+
+
+
+        
+        string array_debug = " ";
+
+        for(int i = 0; i<nodeDataArray.Length;i++)
+        {
+            array_debug = array_debug + " " + nodeDataArray[i].leftChild.ToString() + " " + nodeDataArray[i].rightChild.ToString();
+        }
+
+        Debug.Log($" The BVH tree array looks like this { array_debug} ");
 
         
         
 
-        nodeBuffer = new ComputeBuffer(nodeDataList.Count, sizeof(float) * 6 + sizeof(int) * 6);
-        nodeBuffer.SetData(nodeDataList.ToArray());
+        nodeBuffer = new ComputeBuffer(numberOfNodes, sizeof(float) * 6 + sizeof(int) * 6);
+        nodeBuffer.SetData(nodeDataArray);
 
         // Create triangle buffer
         List<TriangleData> triangleDataList = new List<TriangleData>();
@@ -289,10 +314,11 @@ public class BVHComponent : MonoBehaviour
         CreateBuffers();
     }
 
-    private void FlattenBVHTree(BVHNode node, List<BVHNodeData> nodeDataList)
+    private void FlattenBVHTree(BVHNode node, List<BVHNodeData> nodeDataList, int ind)
     {
 
        int index = nodeDataList.Count;
+       Debug.Log($" number of nodes in this BVH {numberOfNodes}");
         
         BVHNodeData nodeData = new BVHNodeData
         {
@@ -311,9 +337,69 @@ public class BVHComponent : MonoBehaviour
         nodeDataList.Add(nodeData);
 
         if (node.left != null)
-            FlattenBVHTree(node.left, nodeDataList);
+            {
+            FlattenBVHTree(node.left, nodeDataList,index);
+            }
+        else{
+            nodeData.leftChild = -1;
+            }
         if (node.right != null)
-            FlattenBVHTree(node.right, nodeDataList);
+            {
+           FlattenBVHTree(node.right, nodeDataList, index);
+            }
+             else
+             {
+            nodeData.rightChild = -1;
+            }
+
+        
+
+        
+    }
+
+       private void FlattenBVHTree(BVHNode node, BVHNodeData[] nodeDataList, ref int top, int index)
+    {
+
+       
+        
+        BVHNodeData nodeData = new BVHNodeData
+        {
+            min = node.bounds.min,
+            max = node.bounds.max,
+            leftChild = node.left != null ? top+ 1 : -1,
+            rightChild = node.right != null ? top + 2 : -1,
+
+            triangleIndex_A = node.triangleIndex_A,
+            triangleIndex_B = node.triangleIndex_B,
+            triangleIndex_C = node.triangleIndex_C,
+            triangleIndex_D = node.triangleIndex_D,
+
+        };
+
+        if(top > numberOfNodes) return;
+        nodeDataList[index] = nodeData;
+
+        Debug.Log($" Index of this node is { index } left {nodeData.leftChild} right {nodeData.rightChild} top is {top}");
+       
+        if(nodeData.leftChild > -1 || nodeData.rightChild > -1)
+        {
+            top+=2;
+        }
+       
+
+        if (node.left != null)
+        {
+
+        
+           
+            FlattenBVHTree(node.left, nodeDataList,ref top,nodeData.leftChild);
+            }
+       
+        if (node.right != null){
+           
+            FlattenBVHTree(node.right, nodeDataList, ref top, nodeData.rightChild);
+    }
+          
 
         
 

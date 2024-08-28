@@ -11,7 +11,10 @@
 //     // Bounding box of object needs to be oriented along the object axis -> RTS matrices.
 // };
 
-
+struct NeighborIndexData
+{
+    int indices[27];
+};
 struct Particle 
 {
     
@@ -29,6 +32,7 @@ struct Particle
     int hash;
     int index;
     int _static;
+    int type;
 };
 
 struct Vertex{

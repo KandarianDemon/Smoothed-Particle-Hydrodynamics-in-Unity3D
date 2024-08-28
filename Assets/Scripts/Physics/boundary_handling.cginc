@@ -8,60 +8,42 @@
 #include "structs.cginc"
 
 
-int Get_MaxVirtualParticles(float radius, float h){
+float3 TranslatePoint(float3 p, float3 origin)
+{   
 
-    float box_volume = pow(2*h,2)*h;
-    float particle_volume = 4/3*PI*pow(radius,3);
+    // Translates a point to the world coordinates of another point
 
-    return round(box_volume/particle_volume);
-
-
+    return origin + p;
 }
 
-int GenerateVirtualParticles(inout Particle virtualParticles[150], float h, float radius, Particle particle, float3 normal, float distance)
+bool IsWallHit(float3 dist){
+
+    return dist.x < SMOOTHING_RADIUS || dist.y < SMOOTHING_RADIUS || dist.z < SMOOTHING_RADIUS;
+}
+
+
+// Claude AI suggestions
+
+float3 CalculateNearestBoundaryPoint(float3 particlePosition, float3 boxMin, float3 boxMax)
 {
-    float spacing = 2 * h / radius; // Correctly calculate spacing based on radius
+    return clamp(particlePosition, boxMin, boxMax);
+}
+
+float3 CalculateBoundaryForce(float3 particlePosition, float3 boxMin, float3 boxMax, float maxDistance, float boundaryStiffness)
+{
+    float3 nearestPoint = CalculateNearestBoundaryPoint(particlePosition, boxMin, boxMax);
+    float3 r = particlePosition - nearestPoint;
+    float distance = length(r);
     
-
-    int count = 0;
-
-    // Iterate over a cube around the particle, considering only half of it in the direction of overlap
-    for (int x = -h; x <= h; x += spacing)
-    {
-        for (int y = -h; y <= h; y += spacing)
-        {
-            for (int z = -h; z <= h; z += spacing)
-            {
-                float3 offset = float3(x, y, z); // Use Vector3 for offsets
-
-                float3 projectedPosition = offset - dot(offset, normal) * normal; // Ensure correct projection
-
-                // Check if the projected position is within the bounds and overlaps with the boundary
-                if (length(projectedPosition - particle.position) <= h && dot(offset, normal) > distance)
-                {
-                    virtualParticles[count].position = particle.position + projectedPosition;
-                    virtualParticles[count].pressure = 1000.0f;
-                    count++;
-
-                    // Stop generating virtual particles once the limit is reached
-                    if (count >= 150)
-                    {
-                        return count;
-                    }
-                        
-                }
-            }
-        }
-    }
-
-    return count; // Return the final count of generated virtual particles
+    if (distance > maxDistance || distance < 1e-6)
+        return float3(0, 0, 0);
+    
+    float force = boundaryStiffness * (1.0 - distance / maxDistance) * (1.0 - distance / maxDistance);
+    return normalize(r) * force;
 }
 
 
-void EstimateVirtualDensity()
-{
 
-}
 
 
 #endif

@@ -6,6 +6,8 @@ using System.Runtime.InteropServices;
 using UnityEditor;
 using System.Linq;
 using TMPro;
+using System.Data;
+using UnityEngine.UIElements;
 
 [RequireComponent(typeof(MeshRenderer),typeof(MeshFilter))]
 public class ParticleSystem : MonoBehaviour
@@ -40,6 +42,8 @@ public class ParticleSystem : MonoBehaviour
 
     public bool disp_pressure;
 
+    public float threadNum = 512.0f;
+
 
     [Header("Debugging")]
 
@@ -53,13 +57,15 @@ public class ParticleSystem : MonoBehaviour
 
     [Range(10,200)]
     public float maxVelocity;
-     [Range(10,20000)]
+     [Range(10,10000)]
     public float maxPressure;
 
 
-
+    [Header("Object Settings")]
+    public AddConstraints constraints;
     public PrimitiveType type;
     public ObjectType oType;
+    public GameObject mesh;
 
 
     
@@ -68,12 +74,16 @@ public class ParticleSystem : MonoBehaviour
 
     #region SPH Settings
     [Header("SPH Settings")]
+    [Tooltip("This adjusts the size of the grid cells and is the radius for the smoothing kernel")]
     [Range(0.01f,5f)]
     public float smoothingRadius;
-    [Range(0.001f,10000000000)]
-    public float stiffness;
-    public float dynamicViscosity;
     public float particleRadius;
+    [Range(0.001f,100000000000)]
+    public float stiffness;
+    [Range(7.0f,80.0f)]
+    public float dynamicViscosity;
+    
+    [Tooltip("The Epsilon value for the Lennerd-Jones-Force repelling particles from the domain walls")]
     [Range(0.001f,1000.0f)]
     public float lj_epsilon;
 
@@ -82,7 +92,7 @@ public class ParticleSystem : MonoBehaviour
 
     #endregion
 
-    #region ComputeShader
+    #region ComputeShaderAndBuffers
     [Header("Compute Shader")]
     public ComputeShader computeShader;
     public ComputeBuffer PARTICLES;
@@ -117,6 +127,9 @@ public class ParticleSystem : MonoBehaviour
     public int[] gridTracker; // Tracks number of particles within gridCell
     public int[] grid;        // stores indices of particles within Cell
 
+    public ComputeBuffer vPARTICLES;
+
+
 
     // for rendering the particles procedurally
 
@@ -149,10 +162,12 @@ public class ParticleSystem : MonoBehaviour
 
     #endregion
 
+    #region lifecycle_methods
     void Awake()
     {
         renderer = gameObject.GetComponent<MeshRenderer>();
         filter =   gameObject.GetComponent<MeshFilter>();
+        
 
         // GameObject membraneObject = new GameObject("Membrane");
         // MeshFilter memFilter = membraneObject.gameObject.AddComponent<MeshFilter>();
@@ -170,7 +185,7 @@ public class ParticleSystem : MonoBehaviour
         GameObject cube = GameObject.CreatePrimitive(type);
         cube.transform.localScale = cube.transform.localScale*2.5f;
         cube.name = "Cube";
-        cube.transform.position = cube.transform.position + new Vector3(0,2.5f,0);
+        cube.transform.position = cube.transform.position - new Vector3(0,cube.transform.localScale.y,0);
         BVHComponent bvhComponent = cube.AddComponent<BVHComponent>();
         bvhComponent.computeShader = this.computeShader;
         cube.tag ="Simulation Object";
@@ -208,9 +223,43 @@ public class ParticleSystem : MonoBehaviour
 
         else if(oType == ObjectType.Mesh) {
 
-            Debug.Log(" This function provides the possibility to add custom meshes. Needs to be implemented");
+            GameObject custom = GameObject.Find("dragon_remesh");
+            custom.transform.localScale = custom.transform.localScale*2.0f;
+            BVHComponent bvhComponent = custom.GetComponent<BVHComponent>();
+            bvhComponent.computeShader = this.computeShader;
+            custom.tag = "Simulation Object";
+
+
+            MeshFilter customFilter = custom.GetComponent<MeshFilter>();
+            MeshRenderer customRenderer = custom.GetComponent<MeshRenderer>();
+
+            customFilter.mesh.RecalculateNormals();
+
+            custom.transform.SetParent(GameObject.Find("GameObject").transform);
+
+            membraneVerts = new ComputeBuffer(customFilter.mesh.vertices.Length, sizeof(float)*3);
+            Vector3[] worldVerts = new Vector3[customFilter.mesh.vertices.Length];
+
+             for(int i = 0; i < worldVerts.Length;i++)
+            {
+            worldVerts[i] = gameObject.transform.TransformPoint(customFilter.mesh.vertices[i]);
+            }
+
+             membraneVerts.SetData(worldVerts);
+        //memRenderer.material = memMat;
+
+            customRenderer.material = memMat;
+            memMat.SetBuffer("vertices", membraneVerts);
+
+
+            Debug.Log(" DRAGON HAS SPAWNED!");
 
             
+
+        }
+
+        else if(oType == ObjectType.None)
+        {
 
         }
         
@@ -230,6 +279,94 @@ public class ParticleSystem : MonoBehaviour
         
 
        
+    }
+
+     void FixedUpdate()
+    {
+
+        Debug.Log($" Number of boundary particles { (((this.transform.localScale.x + smoothingRadius) * (this.transform.localScale.y + smoothingRadius) * (this.transform.localScale.z + smoothingRadius)) - (this.transform.localScale.x * this.transform.localScale.y * this.transform.localScale.z))/(4/3 * Mathf.PI * particleRadius*particleRadius*particleRadius) + particles.Length}");
+
+
+        if(runSimulation)
+        {
+
+            stats.GetData(_stats);
+            UpdateGUI(_stats[0],_stats[1],_stats[2]);
+            computeShader.SetInt("LOWESTCELL", numberOfParticles*10);
+            computeShader.SetInt("HIGHESTCELL", (int)-1);
+            computeShader.SetFloat("SMOOTHING_RADIUS",smoothingRadius);
+            computeShader.SetFloat("STIFFNESS", stiffness);
+            computeShader.SetFloat("VISCOSITY", dynamicViscosity);
+            computeShader.SetFloat("maxPressure", maxPressure);
+            computeShader.SetFloat("DT",Time.deltaTime);
+            computeShader.SetMatrix("localToWorld", transform.localToWorldMatrix);
+            computeShader.SetMatrix("worldToLocal", transform.worldToLocalMatrix);
+
+            computeShader.SetFloat("EPSILON", lj_epsilon); 
+            
+
+            computeShader.SetVector("HALF_BOUNDSIZE", domain.GetComponent<GLLines>().GetDimensions()/2);
+
+
+             Vector3 numberOfGridCells = domain.GetComponent<GLLines>().GetDimensions()/smoothingRadius;
+
+            int xDim = Mathf.CeilToInt(numberOfGridCells[0]);
+            int yDim = Mathf.CeilToInt(numberOfGridCells[1]);
+            int zDim = Mathf.CeilToInt(numberOfGridCells[2]);
+
+
+            
+            // ============ INVESTIGATE: MOST LIKELY CULPRIT FOR GC ======================
+            // ============ performance gets worse with more particles 
+            //cellCount = new int[xDim*yDim*zDim];
+            // cellCount = new int[particles.Length];
+            // cellTracker = new int[cellCount.Length];
+          
+
+            // if(CELLCOUNT != null) CELLCOUNT.Release();
+            // if(CELLTRACKER != null) CELLTRACKER.Release();
+
+            // CELLTRACKER = new ComputeBuffer(cellTracker.Length, sizeof(int));
+            // CELLTRACKER.SetData(cellTracker);
+
+            // CELLCOUNT = new ComputeBuffer(cellCount.Length, sizeof(int));
+            // CELLCOUNT.SetData(cellCount);
+
+            
+            if(disp_clearGrid)      DispatchClearGrid();
+            if(disp_gridupdate)     DispatchGridUpdate();
+            if(disp_partialSums)    DispatchPartialSums();
+            if(disp_mapParticles)   DispatchMapParticles();
+            //if(disp_neighborSearch) DispatchNeighborSearch();
+            if(disp_density)        DispatchDensity();
+            if(disp_forces)        DispatchComputeForces();
+            if(disp_init) 
+            
+            
+            {
+
+                for(int i = 0; i<1; i++)
+                {
+                    DispatchInit();
+                }
+                
+            }          
+                
+                
+            if(disp_pressure)       DispatchPressure();
+
+
+        }
+
+     
+         
+       
+        
+    }
+
+    public void OnDestroy()
+    {
+        ReleaseBuffers();
     }
 
   
@@ -297,6 +434,10 @@ public class ParticleSystem : MonoBehaviour
         text3.SetText(pMax.ToString());
     }
 
+    #endregion
+
+    #region SetUp
+
     void InitializeParticles()
     {
         
@@ -307,12 +448,13 @@ public class ParticleSystem : MonoBehaviour
 
         // grab verts of membrane and turn them into a particle Array. Then merge fluid particles and membrane particles.
         // Then tell the init kernel which indices to skip (because here are the membrane vertices)
+
+        int n = GameObject.FindGameObjectsWithTag("Simulation Object").Length;
+        GameObject membrane = (GameObject.FindGameObjectsWithTag("Simulation Object").Length == 1) ? null:GameObject.FindGameObjectsWithTag("Simulation Object")[n-1];
         
-        
-        GameObject membrane = GameObject.Find("Cube");
         if(membrane != null)
         {
-
+            Debug.Log("Membrane name " + membrane.name);
        
 
         Vector3[] worldVerts = new Vector3[membrane.GetComponent<MeshFilter>().mesh.vertices.Length];
@@ -328,6 +470,7 @@ public class ParticleSystem : MonoBehaviour
 
             memParticles[i].position = worldVerts[i];
             memParticles[i]._static = 1;
+            memParticles[i].type = (constraints == AddConstraints.Yes) ? 2 : 1;
 
         }
 
@@ -340,6 +483,8 @@ public class ParticleSystem : MonoBehaviour
 
         TRIANGLES.SetData(tris);
         VERTICES.SetData(vertexes);
+
+
 
 
 
@@ -361,12 +506,36 @@ public class ParticleSystem : MonoBehaviour
         {
             particles[i] = memParticles[i];
         }
+
+
+
          }
+
          else{
             particles = new Particle[numberOfParticles];
+
+            Triangle[] tris = new Triangle[1];
+            tris[0].a = -1;
+            tris[0].b = -1;
+            tris[0].c = -1;
+
+            
+
+            TRIANGLES = new ComputeBuffer(tris.Length, Marshal.SizeOf(typeof(Triangle)));
+           
+            TRIANGLES.SetData(tris);
+
+              int UpdateKernel = computeShader.FindKernel("Update");
+              computeShader.SetBuffer(UpdateKernel,"TRIANGLES", TRIANGLES);
+            
+
+
          }
 
         PARTICLES = new ComputeBuffer(particles.Length, Marshal.SizeOf(typeof(Particle)));
+
+        Debug.Log($" {particles.Length} particles occupy a space of {particles.Length} x {Marshal.SizeOf(typeof(Particle))} = {particles.Length * Marshal.SizeOf(typeof(Particle))}");
+
         PARTICLES.SetData(particles);
 
         computeShader.SetVector("HALF_BOUNDSIZE", domain.GetComponent<GLLines>().GetDimensions()/2);
@@ -384,6 +553,32 @@ public class ParticleSystem : MonoBehaviour
         //     CELLCOUNT.SetData(cellCount);
       
 
+
+    }
+
+    void InitializeConstraints()
+    {
+
+        // if mesh or primitive
+        if (oType == ObjectType.None || constraints == AddConstraints.No) return;
+
+        Mesh mesh = transform.GetChild(0).GetComponent<MeshFilter>().mesh;
+        List<SPHConstraint> sph_cons = new List<SPHConstraint>();
+
+        for (int i = 0; i < mesh.triangles.Length; i+=3)
+        {   
+            sph_cons.Add(new SPHConstraint(i,i+1,1));
+            sph_cons.Add(new SPHConstraint(i+1,i+2,1));
+            sph_cons.Add(new SPHConstraint(i+2,i,1));
+        }
+
+
+
+        SPHConstraint[] sph_cons_array = sph_cons.ToArray();
+
+        ComputeBuffer CONSTRAINTS = new ComputeBuffer(sph_cons_array.Length, Marshal.SizeOf(typeof(SPHConstraint)));
+
+        
 
     }
 
@@ -406,91 +601,64 @@ public class ParticleSystem : MonoBehaviour
     public void ChangeViewMode(int number)
     {
 
-        if(number <= 3){
+        if(number <= 6){
 
         
         visMode = number;
         }
     }
 
-
-    void FixedUpdate()
+     void ReleaseBuffers()
     {
-        if(runSimulation)
+        if(PARTICLES != null) PARTICLES.Release();
+        if(quad != null) quad.Release();
+        if(CONNECTIONS != null) CONNECTIONS.Release();
+        if(PARTICLE_MAP!= null) PARTICLE_MAP.Release();
+        if(CELLCOUNT!= null) CELLCOUNT.Release();
+        if(CELLTRACKER!= null) CELLTRACKER.Release();
+        if(membraneVerts!= null) membraneVerts.Release();
+    }
+
+    void CreateVirtualParticleBuffer()
+    {
+
+        int ppA         = Mathf.RoundToInt(smoothingRadius/particleRadius); // number of particles placed along one axis
+        int array_size  = ppA*ppA*ppA; //number of particles inside the array
+
+        Debug.Log($" Number of virtual particles in the stencil {array_size}");
+
+        vPARTICLES = new ComputeBuffer(array_size,sizeof(float)*3);
+        Vector3[] v_Particles = new Vector3[array_size];
+
+        for(int x = 0; x<ppA;x++)
         {
-
-            stats.GetData(_stats);
-            UpdateGUI(_stats[0],_stats[1],_stats[2]);
-            computeShader.SetInt("LOWESTCELL", numberOfParticles*10);
-            computeShader.SetInt("HIGHESTCELL", (int)-1);
-            computeShader.SetFloat("SMOOTHING_RADIUS",smoothingRadius);
-            computeShader.SetFloat("STIFFNESS", stiffness);
-            computeShader.SetFloat("VISCOSITY", dynamicViscosity);
-            computeShader.SetFloat("maxPressure", maxPressure);
-            computeShader.SetFloat("DT",Time.deltaTime);
-            computeShader.SetMatrix("localToWorld", transform.localToWorldMatrix);
-            computeShader.SetMatrix("worldToLocal", transform.worldToLocalMatrix);
-
-            computeShader.SetFloat("EPSILON", lj_epsilon);
-            
-
-            computeShader.SetVector("HALF_BOUNDSIZE", domain.GetComponent<GLLines>().GetDimensions()/2);
-
-
-             Vector3 numberOfGridCells = domain.GetComponent<GLLines>().GetDimensions()/smoothingRadius;
-
-            int xDim = Mathf.CeilToInt(numberOfGridCells[0]);
-            int yDim = Mathf.CeilToInt(numberOfGridCells[1]);
-            int zDim = Mathf.CeilToInt(numberOfGridCells[2]);
-
-
-            
-            // ============ INVESTIGATE: MOST LIKELY CULPRIT FOR GC ======================
-            // ============ performance gets worse with more particles 
-            //cellCount = new int[xDim*yDim*zDim];
-            // cellCount = new int[particles.Length];
-            // cellTracker = new int[cellCount.Length];
-          
-
-            // if(CELLCOUNT != null) CELLCOUNT.Release();
-            // if(CELLTRACKER != null) CELLTRACKER.Release();
-
-            // CELLTRACKER = new ComputeBuffer(cellTracker.Length, sizeof(int));
-            // CELLTRACKER.SetData(cellTracker);
-
-            // CELLCOUNT = new ComputeBuffer(cellCount.Length, sizeof(int));
-            // CELLCOUNT.SetData(cellCount);
-
-            
-            if(disp_clearGrid)      DispatchClearGrid();
-            if(disp_gridupdate)     DispatchGridUpdate();
-            if(disp_partialSums)    DispatchPartialSums();
-            if(disp_mapParticles)   DispatchMapParticles();
-            //if(disp_neighborSearch) DispatchNeighborSearch();
-            if(disp_density)        DispatchDensity();
-            if(disp_forces)        DispatchComputeForces();
-            if(disp_init) 
-            
-            
+            for(int y = 0; y<ppA;y++)
             {
-
-                for(int i = 0; i<1; i++)
+                for(int z = 0; z<ppA;z++)
                 {
-                    DispatchInit();
+
+                    int array_index = x*ppA*ppA+y*ppA + z;
+
+                    v_Particles[array_index] = new Vector3(x,y,z)*particleRadius;
+
                 }
-                
-            }          
-                
-                
-            if(disp_pressure)       DispatchPressure();
 
-
+            }
         }
 
-     
+        vPARTICLES.SetData(v_Particles);
 
-        
+        computeShader.SetBuffer(computeShader.FindKernel("ComputeDensity"),"vPARTICLES", vPARTICLES);
+        computeShader.SetBuffer(computeShader.FindKernel("ComputeForces"),"vPARTICLES", vPARTICLES);
+        computeShader.SetInt("v_ParticleNumber",array_size);
+    
+
+
+
     }
+
+
+   
 
     void CreateBuffers()
     {
@@ -573,9 +741,15 @@ public class ParticleSystem : MonoBehaviour
 
        
         computeShader.SetFloat("pi", Mathf.PI);
+
+        CreateVirtualParticleBuffer();
         
         
     }
+
+    #endregion
+
+    #region dispatchKernels
 
     void DispatchInit()
     {
@@ -607,7 +781,7 @@ public class ParticleSystem : MonoBehaviour
        
       
         
-        int groupsX = Mathf.Max(Mathf.CeilToInt(numberOfParticles/512.0f),1);
+        int groupsX = Mathf.Max(Mathf.CeilToInt(numberOfParticles/threadNum),1);
 
       
         computeShader.Dispatch(UpdateKernel,groupsX,1,1);
@@ -641,7 +815,7 @@ public class ParticleSystem : MonoBehaviour
           
         
         
-        int groupsX = Mathf.Max(Mathf.CeilToInt(cellCount.Length/512.0f),1);
+        int groupsX = Mathf.Max(Mathf.CeilToInt(cellCount.Length/threadNum),1);
         
         computeShader.Dispatch(ClearGridKernel,groupsX,1,1);
 
@@ -674,7 +848,7 @@ public class ParticleSystem : MonoBehaviour
         // {
         //     Debug.Log($"cell {i} contains {cellCount[i]} particles ");
         // }
-        int groupsX = Mathf.Max(Mathf.CeilToInt(particles.Length/512.0f),1);
+        int groupsX = Mathf.Max(Mathf.CeilToInt(particles.Length/64.0f),1);
         computeShader.Dispatch(GridUpdate,groupsX,1,1);
         // Debug.Log(" ====== Grid Update ========= ");
         // Debug.Log($"group size is {groupsX} number of cells is { cellCount.Length}");
@@ -693,7 +867,7 @@ public class ParticleSystem : MonoBehaviour
     {
         int PartialSumsKernel = computeShader.FindKernel("PartialSums");
         if(allBuffersSet == false) computeShader.SetBuffer(PartialSumsKernel, "CELLCOUNT", CELLCOUNT);
-        int groupsX = Mathf.Max(Mathf.CeilToInt(cellCount.Length/512.0f),1);
+        int groupsX = Mathf.Max(Mathf.CeilToInt(cellCount.Length/threadNum),1);
         //computeShader.Dispatch(PartialSumsKernel,groupsX,1,1);
          
         CELLCOUNT.GetData(cellCount);
@@ -731,7 +905,7 @@ public class ParticleSystem : MonoBehaviour
         computeShader.SetBuffer(MapParticlesKernel, "CELLTRACKER", CELLTRACKER);
         
         
-        int groupsX = Mathf.Max(Mathf.CeilToInt(particles.Length/512.0f),1);
+        int groupsX = Mathf.Max(Mathf.CeilToInt(particles.Length/threadNum),1);
         //PARTICLES.GetData(particles);
         //CELLCOUNT.GetData(cellCount);
 
@@ -817,7 +991,7 @@ public class ParticleSystem : MonoBehaviour
         computeShader.SetBuffer(densityKernel, "CELLTRACKER", CELLTRACKER);
         
        
-        int groupsX = Mathf.Max(Mathf.CeilToInt(particles.Length/512.0f),1);
+        int groupsX = Mathf.Max(Mathf.CeilToInt(particles.Length/threadNum),1);
          float startTime = Time.time;
         computeShader.Dispatch(densityKernel,groupsX,1,1);
         
@@ -848,7 +1022,7 @@ public class ParticleSystem : MonoBehaviour
         computeShader.SetBuffer(computeForcesKernel, "PARTICLES", PARTICLES);
         computeShader.SetBuffer(computeForcesKernel, "CELLTRACKER", CELLTRACKER);
 
-        int groupsX = Mathf.Max(Mathf.CeilToInt(particles.Length/512.0f),1);
+        int groupsX = Mathf.Max(Mathf.CeilToInt(particles.Length/threadNum),1);
 
         computeShader.Dispatch(computeForcesKernel, groupsX,1,1);
 
@@ -870,20 +1044,21 @@ public class ParticleSystem : MonoBehaviour
          computeShader.SetBuffer(pressureKernel, "CELLCOUNT",CELLCOUNT);
           computeShader.SetBuffer(pressureKernel, "CELLTRACKER",CELLTRACKER);
 
-        int groupsX = Mathf.Max(Mathf.CeilToInt(particleMap.Length/512.0f),1);
+        int groupsX = Mathf.Max(Mathf.CeilToInt(particleMap.Length/64.0f),1);
 
         computeShader.Dispatch(pressureKernel, groupsX,1,1);
     }
 
     void DispatchCons()
     {
-         int ConnectionKernel = computeShader.FindKernel("ConnectionKernel");
+         int ConnectionKernel = computeShader.FindKernel("ConstraintSolver");
         computeShader.SetBuffer(ConnectionKernel, "CONNECTIONS", CONNECTIONS);
-        int groupsX = Mathf.Max(Mathf.CeilToInt(cons.Length/512.0f),1);
+        int groupsX = Mathf.Max(Mathf.CeilToInt(cons.Length/threadNum),1);
 
         
         computeShader.Dispatch(ConnectionKernel,groupsX,1,1);
     }
+    #endregion
 
      float WPoly6Kernel(float r,float h,float pi)
         {
@@ -907,17 +1082,8 @@ public class ParticleSystem : MonoBehaviour
         }
 
 
-    void ReleaseBuffers()
-    {
-        if(PARTICLES != null) PARTICLES.Release();
-        if(quad != null) quad.Release();
-        if(CONNECTIONS != null) CONNECTIONS.Release();
-        if(PARTICLE_MAP!= null) PARTICLE_MAP.Release();
-        if(CELLCOUNT!= null) CELLCOUNT.Release();
-        if(CELLTRACKER!= null) CELLTRACKER.Release();
-        if(membraneVerts!= null) membraneVerts.Release();
-    }
-
+   
+  #region rendering_functions
   //SetUpBillboardShader
     public void InitShader()
     {
@@ -947,10 +1113,18 @@ public class ParticleSystem : MonoBehaviour
             argsBuffer.SetData(args);
             }
     }
+
+
+    public void ChangeParticleRenderSize(float stepSize)
+    {
+        float size = renderMaterial.GetFloat("_SizeMul");
+        renderMaterial.SetFloat("_SizeMul", size + stepSize);
+
+    }
   //SetUpComputeShader
     public void OnRenderObject()
     {
-          
+        
             renderMaterial.SetVector("worldPosTransform", domain.transform.position);
             renderMaterial.SetVector("dimensions",domain.GetComponent<GLLines>().GetDimensions());
             renderMaterial.SetMatrix("l2w", domain.transform.localToWorldMatrix);
@@ -981,18 +1155,17 @@ public class ParticleSystem : MonoBehaviour
            
             Graphics.DrawMeshInstancedIndirect(particleMesh,0,renderMaterial,bounds, argsBuffer);}
 
-            // if(PARTICLES != null)
-            // {
-            //     PARTICLES.GetData(particles);
-            // }
-    
-    
+        // if(PARTICLES != null)
+        // {
+        //     PARTICLES.GetData(particles);
+        // }
+
+        float et = Time.time;
+       
     }
 
-    public void OnDestroy()
-    {
-        ReleaseBuffers();
-    }
+    
+    #endregion
 
     int Hash(Vector3 position, float numberOfItems)
 {
@@ -1006,6 +1179,7 @@ public class ParticleSystem : MonoBehaviour
     return h;
 }
 
+    #region mesh_generation
     Mesh Generate_Membrane(float h, int resolution){
 
         // x,y resolution of box
@@ -1113,16 +1287,20 @@ public class ParticleSystem : MonoBehaviour
         Vector3[] verts = mesh.vertices;
         int[] triangles = mesh.triangles;
 
+       
+
         for(int i = 0; i<triangles.Length;i+=3)
         {
+
+            //Debug.Log($" number of triangles {triangles.Length/3} number of normals {mesh.normals.Length} current triangle {i}");
             Triangle angle = new Triangle();
             angle.a = triangles[i];
             angle.b = triangles[i+1];
             angle.c = triangles[i+2];
 
             angle.center = (verts[angle.a] + verts[angle.b] + verts[angle.c])/3;
-            angle.normal = Vector3.Cross(verts[angle.c]-verts[angle.a],verts[angle.b] - verts[angle.a]);
-
+            angle.normal = -1*Vector3.Cross(verts[angle.c]-verts[angle.a],verts[angle.b] - verts[angle.a]);
+            //if (i % 2 == 0.0f) angle.normal *= -1; 
             tris.Add(angle);
         }
 
@@ -1145,7 +1323,7 @@ public class ParticleSystem : MonoBehaviour
             {
                 int idx = indices[j];
                 
-                Debug.Log($" vertices Length {vertices.Length} idx is {idx} i is {i}");
+                //Debug.Log($" vertices Length {vertices.Length} idx is {idx} i is {i}");
                
 
                 int n = vertices[idx].numberOfTris;
@@ -1192,31 +1370,36 @@ public class ParticleSystem : MonoBehaviour
 
 
     }
+    #endregion
 
 
         
 
 }
 
+#region structs
+
 public struct Particle
 {
 
-    public Vector3  color;
-    public Vector3  position;
-    public Vector3  velocity;
-    public Vector3  offset;
-    public Vector3 predictedPosition;
+    public Vector3  color;              // Color of the particle for debugging
+    public Vector3  position;           // Particle position
+    public Vector3  velocity;           // Particle Velocity
+    public Vector3  offset;             // Forces applied to the particle
+    public Vector3 predictedPosition;   // Predicted Position
    
 
     
-    public float pressure;
-    public float density;
+    public float pressure;              // Pressure at particle location
+    public float density;               // current density at the particle location
     public float radius;
     public float mass;
 
     public int hash;
     public int index;
-    public int _static;
+    public int _static;                 // is the particle static
+
+    public int type;                    // 0 - Boundary, 1 - Fluid, 2 - Elastic
    
 
    
@@ -1257,6 +1440,23 @@ public struct Connection
     // just a distance constraint, if points are farther or closer than a certain value, position will be adjusted
 }
 
+public struct SPHConstraint
+{
+    public int a;
+    public int b;
+
+    public float distance;
+
+    public SPHConstraint(int a, int b, float distance)
+    {
+        this.a = a;
+        this.b = b;
+        this.distance = distance;
+    }
+
+}
+
+
 public struct Vertex{
     
     public int a,b,c,d,e,f,g;
@@ -1273,5 +1473,7 @@ public struct Triangle{
     public Vector3 normal; // normal direction of the triangle;
 
 }
+
+#endregion
 
 

@@ -1,4 +1,7 @@
+
+#include "structs.cginc"
 static const int triangles[36] =
+
 
 { 
         
@@ -186,6 +189,98 @@ int GridCellID(float3 position, int3 dimensions)
 
 
 }
+
+int GetCellHash(float3 position,float3 boundSize,float smoothingRadius,int numCells)
+{
+
+    // Function takes the original Position!
+    // position         : Original Position as stored for the Particle
+    // bound size       : The dimensions of the bounding box
+    // smoothingRadius  : Smoothing radius or cell size
+    // number of cells  : Nuber of Cells 
+
+
+    // Normalize the position in relation to the bounding box and the cell size.
+    float3 norm_pos = NormalizePosition(position,boundSize)/smoothingRadius;
+
+    
+    //Compute the Hash value for the residing cell
+
+    //First get cell coordinates
+    int xi = floor(norm_pos.x);
+    int yi = floor(norm_pos.y);
+    int zi = floor(norm_pos.z);
+
+
+    // use cell coordinates to obtain Hash value
+    uint hash = (xi * 92837111) ^ (yi * 689287499) ^ (zi * 2839923481);
+    int h = abs(hash) % (numCells);
+
+    return h;
+
+
+
+}
+
+NeighborIndexData GetNeighborCellIndices(float3 normalizedPosition, int3 dimensions, float radius, int numCells)
+{   
+
+    int index = 0;          //counter to access the indices in the 1D-array
+    
+    NeighborIndexData data; // struct containing the index array
+    int indices[27];
+
+
+
+    int3 fakePos = normalizedPosition*10000;
+    int step = radius*10000;
+
+     for(int x = fakePos.x-step; x <= fakePos.x+step ;x+=step)
+    {
+        for(int y = fakePos.y - step; y <= fakePos.y+step ;y+=step)
+        {
+             for(int z = fakePos.z - step; z <= fakePos.z+step ;z+=step)
+                {
+                
+                    
+                    float3 rePos = float3(x,y,z)/10000.0f;
+
+                    int3 cellID = IntCoord(rePos/radius);
+                //     if(i == 26) break;
+                    int u = cellID.x;
+                    int v = cellID.y;
+                    int w = cellID.z;
+
+                    u = (sign(u) == -1) ? 0:min(u,dimensions.x);
+                    v = (sign(v) == -1) ? 0:min(v,dimensions.y);
+                    w = (sign(w) == -1) ? 0:min(w,dimensions.z);
+
+
+                      uint hash = (cellID.x * 92837111) ^ (cellID.y * 689287499) ^ (cellID.z * 2839923481);
+                    int h = abs(hash) % numCells;
+                    
+                     indices[index] = h;
+                    
+                     //indices[i] = (floor(u * (dimensions.y) *(dimensions.z)) + floor(v*(dimensions.z)) + w);
+                    index++;
+
+                    if(index >= 27) {
+                        data.indices = indices;
+                        return data;}
+
+
+                }
+        
+        }
+    }
+
+       
+    
+    data.indices = indices;
+    return data;
+}
+
+
 
 
 

@@ -4,6 +4,7 @@
 #define MAX_BVH_DEPTH 32
 
 #include "structs.cginc"
+#include "raycast.cginc"
 
 struct BVHNode
 {
@@ -25,6 +26,17 @@ struct ParticleNodeInfo
     float collisionDistance;
 };
 
+struct Bounds{
+
+    float3 minBound;        // minimum corner
+    float3 maxBound;        // maximum corner
+    float3 center;          // center of the Bounding Box
+
+    float3 size;            // size
+    float3 extent;          // HalfSize size
+    float  volume;          // volume of the bounding box
+};
+
 // struct Triangle
 // {
 //     float3 v0, v1, v2;
@@ -33,8 +45,37 @@ struct ParticleNodeInfo
 StructuredBuffer<BVHNode> _BVHNodes;
 StructuredBuffer<Triangle> _Triangles;
 
+
+bool IsPointInsideAABB(float3 p, float3 bounds_min, float3 bounds_max)
+{
+    return p.x >= bounds_min.x && p.x <= bounds_max.x &&
+           p.y >= bounds_min.y && p.y <= bounds_max.y &&
+           p.z >= bounds_min.z && p.z <= bounds_max.z;
+}
+
+
+
+bool IsRayOriginInsideNode(Ray ray,BVHNode node)
+{
+
+    float3 o       = ray.origin;
+    float3 _min    = node.min;
+    float3 _max    = node.max;
+
+    bool xInside = (_min.x < o.x) &&(o.x < _max.x);
+    bool yInside = (_min.y < o.y) &&(o.y < _max.y);
+    bool zInside = (_min.z < o.z) &&(o.z < _max.z);
+
+    return xInside && yInside && zInside;
+
+
+
+}
 bool IntersectAABB(float3 rayOrigin, float3 rayDir, float3 boxMin, float3 boxMax, out float tMin, out float tMax)
 {
+
+
+    if(IsPointInsideAABB(rayOrigin, boxMin,boxMax)) return false;
     float3 invDir = 1.0 / rayDir;
     float3 t0 = (boxMin - rayOrigin) * invDir;
     float3 t1 = (boxMax - rayOrigin) * invDir;
@@ -47,12 +88,45 @@ bool IntersectAABB(float3 rayOrigin, float3 rayDir, float3 boxMin, float3 boxMax
     return tMax >= tMin && tMax >= 0;
 }
 
-bool IsPointInsideAABB(float3 p, float3 bounds_min, float3 bounds_max)
-{
-    return p.x >= bounds_min.x && p.x <= bounds_max.x &&
-           p.y >= bounds_min.y && p.y <= bounds_max.y &&
-           p.z >= bounds_min.z && p.z <= bounds_max.z;
+bool IntersectAABB(Ray ray, float3 boxMin, float3 boxMax, out float tMin, out float tMax)
+{   
+
+    if(IsPointInsideAABB(ray.origin, boxMin,boxMax)) return false;
+
+    float3 rayOrigin = ray.origin;
+    float3 rayDir       = ray.direction;
+    float3 invDir = 1.0 / rayDir;
+    float3 t0 = (boxMin - rayOrigin) * invDir;
+    float3 t1 = (boxMax - rayOrigin) * invDir;
+    float3 tmin = min(t0, t1);
+    float3 tmax = max(t0, t1);
+
+    tMin = max(max(tmin.x, tmin.y), tmin.z);
+    tMax = min(min(tmax.x, tmax.y), tmax.z);
+
+    return tMax >= tMin && tMax >= 0;
 }
+
+bool IntersectAABB(Ray ray, Bounds bounds, out float tMin, out float tMax)
+{   
+    if(IsPointInsideAABB(ray.origin, bounds.minBound,bounds.maxBound)) return false;
+
+
+    float3 rayOrigin    = ray.origin;
+    float3 rayDir       = ray.direction;
+    float3 invDir       = 1.0 / rayDir;
+    float3 t0           = (bounds.minBound - rayOrigin) * invDir;
+    float3 t1           = (bounds.maxBound - rayOrigin) * invDir;
+    float3 tmin         = min(t0, t1);
+    float3 tmax         = max(t0, t1);
+
+    tMin                = max(max(tmin.x, tmin.y), tmin.z);
+    tMax                = min(min(tmax.x, tmax.y), tmax.z);
+
+    return tMax >= tMin && tMax >= 0;
+}
+
+
 
 
 bool IntersectTriangle(float3 rayOrigin, float3 rayDir, Triangle tri,RWStructuredBuffer<Particle> PARTICLES, out float t, out float3 barycentricCoords)
@@ -102,6 +176,99 @@ bool IntersectTriangle(float3 rayOrigin, float3 rayDir, Triangle tri,RWStructure
     return t > 0;
 }
 
+bool isLeafNode(BVHNode node)
+{
+    
+    // function checks wether the node is a leaf node
+    if(node.leftChild < 0 || node.rightChild <0)
+    {
+        return true;
+    };
+
+    return false;
+
+}
+
+int CheckChildNodesForIntersection(BVHNode node,Ray ray)
+{
+
+   if(isLeafNode(node)) return -1;
+
+   int l = node.leftChild;
+   int r = node.rightChild;
+
+   int nextIndex;
+
+   BVHNode left = _BVHNodes[l];
+   BVHNode right = _BVHNodes[r];
+   
+   bool isInsideLeft = IsRayOriginInsideNode(ray,left);
+   bool isInsideRight = IsRayOriginInsideNode(ray,right);
+
+   if(isInsideLeft) nextIndex = l;
+   if(isInsideRight) nextIndex = r;
+   if(!isInsideLeft && !isInsideRight) nextIndex = -1;
+
+   return nextIndex;
+
+
+
+
+}
+
+
+bool BVH_BroadPhase(Ray ray, in out int containedIDX, in out int intersectedIDX)
+{
+
+    // Returns colliding node indices.
+
+    
+
+
+
+
+    // Set nodeindex to 0 to start with root node.
+    int nodeIndex = 0;
+    int counter = 0;
+    int max_depth = 64;
+
+    containedIDX = 0;
+    intersectedIDX =0;
+    
+
+    while(true)
+    {   
+
+        BVHNode node = _BVHNodes[nodeIndex];
+
+        //  0) check if current node is a leaf node.
+        bool isLeaf = isLeafNode(node);
+
+        if(isLeaf)
+        {
+        
+        containedIDX = nodeIndex;
+        return true;
+        }
+
+        
+        // find next node to move into.
+
+        int nextIndex = CheckChildNodesForIntersection(node,ray);
+        if(nextIndex < 0) return false;
+
+        nodeIndex = nextIndex;
+
+        counter++;
+
+        if(counter >= max_depth) return false;
+
+    }
+
+
+}
+
+ 
 
 
 bool TraverseBVH(float3 rayOrigin, float3 rayDir, RWStructuredBuffer<Particle> PARTICLES, out float hitDistance, out int hitTriIndex)
@@ -283,6 +450,22 @@ ParticleNodeInfo TraverseBVHForParticle(float3 particlePosition, float3 particle
 
     return info;
 }
+
+bool checkLeafNodeAndReturnIndex(BVHNode node)
+{
+
+    // function checks wether the node is a leaf node
+    if(node.leftChild < 0 || node.rightChild <0)
+    {
+        return true;
+    };
+
+    return false;
+}
+
+
+
+
 
 
 

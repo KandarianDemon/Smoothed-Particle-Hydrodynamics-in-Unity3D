@@ -69,6 +69,7 @@ Shader "Custom/Billboard Particles"
 				int index;
 
 				int _static;
+                int type;
               
             };
 
@@ -131,7 +132,10 @@ Shader "Custom/Billboard Particles"
                 float density = particles[inst].density;
                 float d_value = density / maxDensity;
                 float v_value = length(particles[inst].velocity) / maxVelocity;
-                float p_value = particles[inst].pressure / maxPressure;
+                float p_value = particles[inst].pressure / (maxPressure * 10000000000.0f);
+                float forceMagnitude = length(particles[inst].offset)/100000.0f;
+
+                
 
                 switch(visMode)
                 {
@@ -139,6 +143,20 @@ Shader "Custom/Billboard Particles"
                     case 1: o.col = float4(0, v_value, 1-v_value, 1); break;
                     case 2: o.col = float4(1-p_value, p_value, 0, 1); break;
                     case 3: o.col = float4(particles[inst].color, 1); break;
+                    case 4: o.col = float4( floor((particles[inst].position.x/0.35f)*floor(255/dimensions.x)),
+                                            floor((particles[inst].position.y/0.35f)*floor(255/dimensions.y)),
+                                            floor((particles[inst].position.z/0.35f)*floor(255/dimensions.z)),1); break;
+                    case 5: o.col = float4(normalize(particles[inst].velocity/2 + 0.5f),1);
+                                    break;
+
+                    // case 6: o.col = float4(normalize(particles[inst].offset/2+ 0.5f),1);
+                    //                 break;
+
+                    
+                    case 6: o.col = float4(float3(forceMagnitude,0,1-forceMagnitude),1);
+                                    break;
+                   
+                
                 }
 
                 TRANSFER_SHADOW(o);

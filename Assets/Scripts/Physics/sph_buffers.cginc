@@ -26,4 +26,6 @@ RWStructuredBuffer<uint2> SPATIALHASH;
 
 RWStructuredBuffer<float3> stats;
 
+StructuredBuffer<float3> vPARTICLES;
+
 #endif

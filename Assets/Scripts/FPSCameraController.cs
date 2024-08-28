@@ -28,6 +28,7 @@ public class FPSCameraController : MonoBehaviour
         HandleSprint();
         ResetViewOnKey();
         ChangeParticleViewMode();
+        ChangeParticleRenderSize();
 
         if(domain != null)
         {
@@ -61,6 +62,7 @@ public class FPSCameraController : MonoBehaviour
        
     }
 
+  
     void HandleMovement()
     {
         float moveX = Input.GetAxis("Horizontal") * moveSpeed;
@@ -136,6 +138,36 @@ public class FPSCameraController : MonoBehaviour
             system.ChangeViewMode(3);
         }
 
+        if(Input.GetKey(KeyCode.Alpha5))
+        {
+            system.ChangeViewMode(4);
+        }
+
+         if(Input.GetKey(KeyCode.Alpha6))
+        {
+            system.ChangeViewMode(5);
+        }
+
+        if(Input.GetKey(KeyCode.Alpha7))
+        {
+            system.ChangeViewMode(6);
+        }
+
+
+    }
+
+    void ChangeParticleRenderSize()
+    {
+        ParticleSystem system = domain.GetComponent<ParticleSystem>();
+
+        if(Input.GetKey(KeyCode.P))
+        {
+            system.ChangeParticleRenderSize(0.005f);
+        }
+
+        if(Input.GetKey(KeyCode.O)){
+            system.ChangeParticleRenderSize(-0.005f);
+        }
     }
 
     void ToggleSimulationObjects()

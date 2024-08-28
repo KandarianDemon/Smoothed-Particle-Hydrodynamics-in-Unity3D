@@ -32,4 +32,15 @@ void SemiImplicitEuler(inout float3 position, inout float3 velocity, float3 pres
     position += velocity * timestep;
 }
 
+void LeapfrogIntegrator(inout float3 position, inout float3 velocity, float3 pressureforce, float timestep)
+{
+    float3 acceleration = pressureforce + GRAVITY;
+    
+    // Update position using current velocity
+    position += velocity * timestep + 0.5f * acceleration * timestep * timestep;
+    
+    // Update velocity
+    velocity += acceleration * timestep;
+}
+
 #endif

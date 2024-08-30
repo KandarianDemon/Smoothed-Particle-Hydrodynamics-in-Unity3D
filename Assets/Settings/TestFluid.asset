@@ -1,0 +1,19 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b3ce0300d7837542aa8b2a8e2ac04d9, type: 3}
+  m_Name: TestFluid
+  m_EditorClassIdentifier: 
+  objType: 0
+  density: 1000
+  viscosity: 50
+  color: {r: 0.6603774, g: 0.046724807, b: 0.046724807, a: 0}
+  isStatic: 0

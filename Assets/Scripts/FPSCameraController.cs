@@ -1,4 +1,5 @@
 using UnityEngine;
+using Simulation;
 
 public class FPSCameraController : MonoBehaviour
 {
@@ -29,6 +30,7 @@ public class FPSCameraController : MonoBehaviour
         ResetViewOnKey();
         ChangeParticleViewMode();
         ChangeParticleRenderSize();
+        Reset();
 
         if(domain != null)
         {
@@ -36,7 +38,7 @@ public class FPSCameraController : MonoBehaviour
         }
 
         if(Input.GetKeyDown(KeyCode.Space)){
-            domain.GetComponent<ParticleSystem>().Run_Pause();
+            domain.GetComponent<Simulation.ParticleSystem>().Run_Pause();
         }
 
         if(Input.GetKeyDown(KeyCode.Q))
@@ -60,6 +62,15 @@ public class FPSCameraController : MonoBehaviour
 
         gameObject.transform.localRotation = Quaternion.Euler(currentRotation.x,currentRotation.y, 0f);
        
+    }
+
+    void Reset()
+    {
+        if(Input.GetKeyDown(KeyCode.X))
+        {
+            Simulation.ParticleSystem system = domain.GetComponent<Simulation.ParticleSystem>();
+            system.ResetSimulation();
+        }
     }
 
   
@@ -117,7 +128,7 @@ public class FPSCameraController : MonoBehaviour
 
     void ChangeParticleViewMode()
     {
-        ParticleSystem system = domain.GetComponent<ParticleSystem>();
+        Simulation.ParticleSystem system = domain.GetComponent<Simulation.ParticleSystem>();
 
         if(Input.GetKey(KeyCode.Alpha1))
         {
@@ -158,7 +169,7 @@ public class FPSCameraController : MonoBehaviour
 
     void ChangeParticleRenderSize()
     {
-        ParticleSystem system = domain.GetComponent<ParticleSystem>();
+        Simulation.ParticleSystem system = domain.GetComponent<Simulation.ParticleSystem>();
 
         if(Input.GetKey(KeyCode.P))
         {

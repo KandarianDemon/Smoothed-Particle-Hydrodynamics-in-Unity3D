@@ -1,0 +1,196 @@
+#pragma target 5.0
+
+#pragma kernel InitParticles
+
+// **** Neighbor Hood Search ******
+// Assigning a hash value to each particle to sort into a grid array. PArticles are sorted and mapped by grid location.
+#pragma kernel ClearGrid
+#pragma kernel GridUpdate
+#pragma kernel PartialSums
+#pragma kernel MapParticles
+
+// ****** Physics *****************
+// Implementation of standard SPH procedure.
+// Forces computation can include boundary forces
+#pragma kernel ComputeDensity
+#pragma kernel ComputeForces
+#pragma kernel ConstraintSolver
+
+// ****** Integration *************
+#pragma kernel Update
+
+
+
+
+// ********* SPH Related Functions *******
+#include "./Include/SPH/SPHkernels.cginc"
+#include "./Include/SPH/SPHUtility.hlsl"
+#include "./Include/SPH/structs.cginc"
+#include "./Include/SPH/sph_settings.cginc"
+#include "./Include/SPH/sph_buffers.cginc"
+
+//********** Collision Detection *********
+#include "./Include/CollisionDetection/collisions_detection.hlsl"
+#include "./Include/CollisionDetection/boundary_handling.cginc"
+#include "./Include/CollisionDetection/BVH.cginc"
+
+//********* MAths and Physics functions *************
+#include "./Include/Math/integrators.cginc"
+#include "./Include/Math/constraints.hlsl"
+#include "./Include/Math/FluidMaths.hlsl"
+
+#define MAX_NEIGHBORS 100
+#define GROUP_SIZE 512
+
+
+[numthreads(GROUP_SIZE,1,1)]
+void InitParticles(uint3 id: SV_DispatchThreadID)
+{
+
+    // Initializes Particles in given Locations
+    // Placement of particles -> Volume mesh. Place in grid, or random. Volume should be conserved tho.
+
+}
+
+[numthreads(GROUP_SIZE,1,1)]
+void ClearGrid(uint3 id: SV_DispatchThreadID)
+{
+
+    // Clears the Grid for neighbor computation
+
+    CELLCOUNT[id.x] = 0;
+    CELLTRACKER[id.x] = 0;
+
+}
+
+[numthreads(GROUP_SIZE,1,1)]
+void GridUpdate(uint3 id: SV_DispatchThreadID)
+{
+    // Updates the grid and assigns particles to a grid id via Hashing.
+
+    if(id.x >= NUMBER_OF_PARTICLES) return;
+
+    int idCell = GetCellHash(PARTICLES[id.x].position,HALF_BOUNDSIZE,SMOOTHING_RADIUS,NUMBEROFCELLS);  // Returns Hash of the current grid Cell
+    InterlockedAdd(CELLCOUNT[idCell],1u);                                                              // Increments the count of cells in current grid cell
+    PARTICLES[id.x].hash = idCell;                                                                     // Stores current grid ID on the particle
+    PARTICLES[id.x].predictedPosition = PARTICLES[id.x].position + GRAVITY * 1/120.0f;                 // predicts future position on basis of external forces only.
+
+   
+
+
+    
+
+}
+
+[numthreads(GROUP_SIZE,1,1)]
+void PartialSums(uint3 id: SV_DispatchThreadID)
+{
+
+    // Loops over all the cells and writes the partial sums in the non occupied cells. So occupied cells in 
+    // a sparse grid can be found
+
+    if(id.x >= NUMBEROFCELLS) return;
+
+    int partialSum = 0;
+
+    if(id.x == 0) {
+        partialSum = CELLCOUNT[id.x];
+    }
+    else{
+
+        for(int i = 0; i<= id.x;i++)
+        {
+            partialSum += CELLCOUNT[id.x];          // 00000111111111112222222444444444 
+        }
+    }
+
+    CELLCOUNT[id.x] = partialSum;
+}
+
+[numthreads(GROUP_SIZE,1,1)]
+void MapParticles(uint3 id: SV_DispatchThreadID)
+{
+
+    // Orders the particles in a "ParticleMap"- buffer, so they can be accessed by the neighborhood search
+    if(id.x >= NUMBER_OF_PARTICLES) return;
+    
+    int idCell = PARTICLES[id.x].hash;
+    int index = 0;
+
+    InterlockedAdd(CELLTRACKER[idCell],1,index);
+
+    int startIndex = CELLCOUNT[idCell] - index;   // new index of the particle in the sorted particle map
+    PARTICLES[id.x].index = startIndex;       // Store the index on the particle
+
+    PARTICLEMAP[startIndex] = id.x;           // store id of the particle in the sorted array
+    
+
+}
+
+[numthreads(GROUP_SIZE,1,1)]
+void ComputeDensity(uint3 id: SV_DispatchThreadID)
+{
+
+   
+
+    if(id.x >= NUMBER_OF_PARTICLES) return;
+
+
+    // ************ Identify indices of the neighboring 27 cells.*******************
+
+            // :: Get CurrentPosition
+            // :: Interpolate neighbor cells
+            // :: Retrieve CellIndex in that position.
+
+            // :: Could also work with BVH Nodes and flattened BVHNode array.
+
+            // return int[27] array of Indices.
+
+
+
+
+    // ************ Access Neighbor Particles **********************************
+    // Loop over the neighbor Cells and check the particles contained within them.
+
+    // Apply Smoothing Kernel and compute density;
+
+
+
+
+}
+
+[numthreads(GROUP_SIZE,1,1)]
+void ComputeForces(uint3 id: SV_DispatchThreadID)
+{
+
+   // *************** Identify indices of the neighboring 27 cells ****************
+
+
+   // *************** Access Neighbor Particles ***********************************
+
+
+   // ************** Do Stuff with the Particles **********************************
+
+}
+
+[numthreads(GROUP_SIZE,1,1)]
+void ConstraintSolver(uint3 id: SV_DispatchThreadID)
+{
+    // ************** Solves physics constraints ******************
+    // __ Distances, joints, springs, orientation constraints _____
+}
+
+[numthreads(GROUP_SIZE,1,1)]
+void Update(uint3 id: SV_DispatchThreadID)
+{
+    // ***************** Set Up Position, Velocity, Forces **********************
+    // ********************** Choose Integrator *********************************
+    // ***************** Integrate Position and Velocity ************************
+    // ***************** Resolve Membrane Collisions ****************************
+    // ***************** Resolve Domain Collisions ******************************
+    // *********************** Debug Stuff **************************************
+
+
+}
+
+

@@ -2,30 +2,29 @@ using UnityEngine;
 using UnityEditor;
 using Simulation;
 
-[CustomEditor(typeof(Simulator))]
-public class SimulatorEditor : Editor
+[CustomEditor(typeof(SimulationObject))]
+public class SimulationObjectEditor : Editor
 {
-    private bool showSimulationSettings = true;
-    
+    private bool showObjectSettings = true;
     
 
     public override void OnInspectorGUI()
     {
         DrawDefaultInspector();
 
-        Simulator simulator = (Simulator)target;
+        SimulationObject obj = (SimulationObject)target;
 
         EditorGUILayout.Space();
 
-        showSimulationSettings = EditorGUILayout.Foldout(showSimulationSettings, "Simulation Settings", true);
+        showObjectSettings = EditorGUILayout.Foldout(showObjectSettings, "Object Settings", true);
 
-        if (showSimulationSettings)
+        if (showObjectSettings)
         {
             EditorGUI.indentLevel++;
 
-            if (simulator.simulationSettings != null)
+            if (obj.settings != null)
             {
-                SerializedObject settingsObject = new SerializedObject(simulator.simulationSettings);
+                SerializedObject settingsObject = new SerializedObject(obj.settings);
                 SerializedProperty property = settingsObject.GetIterator();
                 property.NextVisible(true);
 

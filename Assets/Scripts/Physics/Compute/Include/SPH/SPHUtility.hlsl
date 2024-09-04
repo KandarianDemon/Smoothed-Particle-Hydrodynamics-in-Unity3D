@@ -256,7 +256,7 @@ NeighborIndexData GetNeighborCellIndices(float3 normalizedPosition, int3 dimensi
                     w = (sign(w) == -1) ? 0:min(w,dimensions.z);
 
 
-                      uint hash = (cellID.x * 92837111) ^ (cellID.y * 689287499) ^ (cellID.z * 2839923481);
+                    uint hash = (cellID.x * 92837111) ^ (cellID.y * 689287499) ^ (cellID.z * 2839923481);
                     int h = abs(hash) % numCells;
                     
                      indices[index] = h;

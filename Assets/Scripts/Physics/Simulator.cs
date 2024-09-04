@@ -43,11 +43,6 @@ public class Simulator : MonoBehaviour
             InitializeSimulation();
             
             
-            
-
-        // InitializeParticleData.
-        //InitializeSimulation(data, simulationSettings);   // Function needs to return some flags, to determine wether setup was
-                                                // successfull.
          
        }
 
@@ -55,6 +50,11 @@ public class Simulator : MonoBehaviour
        {
 
         //SimulationStep(data);                   //Steps the simulation forward.
+
+       }
+
+       void OnRender()
+       {
 
        }
 
@@ -103,18 +103,27 @@ public class Simulator : MonoBehaviour
 
 
 
-            // // CreateBuffers and SetData
+            // CreateBuffers and SetData
             buffers = computeData.buffers;
             bufferNames = computeData.bufferNames;
 
             // Get kernels and assign buffers
             kernelNames = computeData.kernelNames;
-            // kernelBufferMap = ComputeHelper.GenerateBufferKernelMap(simulationSettings.compute);
+            kernelBufferMap = ComputeHelper.GenerateBufferKernelMap(simulationSettings.compute);
 
 
             // Assign properties.
+
+            // Only do this, when the old Particle System isnt active.
+
+            if(GetComponent<ParticleSystem>().enabled == false)
+            {
+            
             simulationSettings.LinkPropertiesToShader();
             computeData.LinkBuffersToKernels(simulationSettings.compute);
+            InitializeParticles(computeData, simulationSettings.compute);
+            }
+            
        
 
 
@@ -148,6 +157,23 @@ public class Simulator : MonoBehaviour
         throw new System.NotImplementedException();
        }
 
+       void InitializeParticles(ComputeShaderData<ParticleData> computeData,ComputeShader cs)
+       {
+
+            //Check if the buffers are null
+            if (computeData == null || cs == null) return;
+
+            int InitParticlesKernel = cs.FindKernel("InitParticles");
+            Vector3Int groupSize = ComputeHelper.GetThreadGroupSize(cs, InitParticlesKernel);
+
+
+
+            cs.Dispatch(InitParticlesKernel, groupSize.x, groupSize.y, groupSize.z);
+            
+
+
+       }
+
        #endregion
 
 
@@ -159,42 +185,44 @@ public class Simulator : MonoBehaviour
 
 public struct ParticleData
 {
-    public Vector3[]   position;                       // Holds the position of the particles
-    public Vector3[]   velocity;                       // Holds the velocity of the particles
+    public Vector3[]   positions;                       // Holds the position of the particles
+    public Vector3[]   velocities;                       // Holds the velocity of the particles
 
     public Vector3[]   predictedPositions;             // predictedPosition for density estimation.
     public Vector3[]   forces;                         // Forces applied to that particle
-    public Vector3[]   color;
-    public Particle[] particles;                        // Color of the particle. USeful for debugging
+    public Vector3[]   colors;
+    public Particle[] particles;                        // Color of the particle. USeful for debugging !!!! REMOVE REMOVE REMOVE REMOVE
 
-    public float[]      density;                       // Current density at particle location
-    public float[]      refDensity;                    // reference density of the fluid or body
-    public float[]      pressure;                      // estimated pressure at particle location
+    public float[]      densities;                       // Current density at particle location
+    public float[]      refDensities;                    // reference density of the fluid or body
+    public float[]      pressures;                      // estimated pressure at particle location
+        public float[] masses;
     public int[]       _static;                        // is the particle immovable. (actually can be replaced with type)
-    public int[]       type;                           // type. 0 = BOUNDARY, 1 = FLUID, 2 = ELASTIC
+    public int[]       types;                           // type. 0 = BOUNDARY, 1 = FLUID, 2 = ELASTIC
 
-    public int[]       hash;                           // grid cell hash of the particle
+    public int[]       hashes;                           // grid cell hash of the particle
 
-    public int[]       index;                          // index of the particle in the sorted particle Map
+    public int[]       indices;                          // index of the particle in the sorted particle Map
 
 
     public ParticleData(int numberOfEntries)
     {
 
-            position = new Vector3[numberOfEntries];
-            velocity = new Vector3[numberOfEntries];
+            positions = new Vector3[numberOfEntries];
+            velocities = new Vector3[numberOfEntries];
             predictedPositions = new Vector3[numberOfEntries];
             forces = new Vector3[numberOfEntries];
-            color = new Vector3[numberOfEntries];
+            colors = new Vector3[numberOfEntries];
             particles = new Particle[numberOfEntries];
 
-            density = new float[numberOfEntries];
-            refDensity = new float[numberOfEntries];
-            pressure = new float[numberOfEntries];
+            densities = new float[numberOfEntries];
+            refDensities = new float[numberOfEntries];
+            masses = new float[numberOfEntries];
+            pressures = new float[numberOfEntries];
             _static = new int[numberOfEntries];
-            type = new int[numberOfEntries];
-            hash = new int[numberOfEntries];
-            index = new int[numberOfEntries];
+            types = new int[numberOfEntries];
+            hashes = new int[numberOfEntries];
+            indices = new int[numberOfEntries];
 
     }
 

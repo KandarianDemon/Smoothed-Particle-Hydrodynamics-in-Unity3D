@@ -1,23 +1,23 @@
 #pragma target 5.0
 
-#pragma kernel InitParticles
+#pragma kernel InitParticles    //<<::POSITIONS::VELOCITIES::DENSITIES::REFDENSITIES::_STATIC::TYPES::COLORS::MASSES::>>
 
 // **** Neighbor Hood Search ******
 // Assigning a hash value to each particle to sort into a grid array. PArticles are sorted and mapped by grid location.
-#pragma kernel ClearGrid
-#pragma kernel GridUpdate
-#pragma kernel PartialSums
-#pragma kernel MapParticles
+#pragma kernel ClearGrid        //<<::CELLCOUNT::CELLTRACKER::>>
+#pragma kernel GridUpdate       //<<::HASHES::PREDICTEDPOSITIONS::POSITIONS::CELLCOUNT::>>
+#pragma kernel PartialSums      //<<::CELLCOUNT::>>
+#pragma kernel MapParticles     //<<::PARTICLEMAP::HASHES::CELLCOUNT::CELLTRACKER::INDICES::>>
 
 // ****** Physics *****************
 // Implementation of standard SPH procedure.
 // Forces computation can include boundary forces
-#pragma kernel ComputeDensity
-#pragma kernel ComputeForces
+#pragma kernel ComputeDensity //<::POSITIONS::PREDICTEDPOSITIONS::CELLCOUNT::CELLTRACKER::PARTICLEMAP::DENSITIES::REFDENSITIES::PRESSURES::>>
+#pragma kernel ComputeForces // <::POSITIONS::PREDICTEDPOSITIONS::CELLCOUNT::CELLTRACKER::PARTICLEMAP::FORCES::PRESSURES::>>
 #pragma kernel ConstraintSolver
 
 // ****** Integration *************
-#pragma kernel Update
+#pragma kernel Update //<::POSITIONS::VELOCITIES::FORCES::>>
 
 
 
@@ -27,8 +27,8 @@
 #include "./Include/SPH/SPHUtility.hlsl"
 #include "./Include/SPH/structs.cginc"
 #include "./Include/SPH/sph_settings.cginc"
-#include "./Include/SPH/sph_buffers.cginc"
-
+#include "./Include/SPH/sph_gpu_buffers.cginc"
+//#include "./Include/SPH/sph_buffers.cginc"
 //********** Collision Detection *********
 #include "./Include/CollisionDetection/collisions_detection.hlsl"
 #include "./Include/CollisionDetection/boundary_handling.cginc"
@@ -39,8 +39,9 @@
 #include "./Include/Math/constraints.hlsl"
 #include "./Include/Math/FluidMaths.hlsl"
 
-#define MAX_NEIGHBORS 100
+#define MAX_NEIGHBORS 80
 #define GROUP_SIZE 512
+#define USE_SOA
 
 
 [numthreads(GROUP_SIZE,1,1)]
@@ -49,6 +50,29 @@ void InitParticles(uint3 id: SV_DispatchThreadID)
 
     // Initializes Particles in given Locations
     // Placement of particles -> Volume mesh. Place in grid, or random. Volume should be conserved tho.
+
+    // Places particles in relation to the simulation space.
+
+    if(_STATIC[id.x] == 1)
+    {
+        COLORS[id.x]        = float3(0,1,0);
+        VELOCITIES[id.x]    = -GRAVITY*0.5f;
+        TYPES[id.x]         = 1;
+        return;
+    }
+
+    int3 dimensions = GetDimensions(float3(1,1,1),PARTICLE_RADIUS/2.0f);
+
+    int x = floor(id.x/(dimensions.y*dimensions.x));
+    int y = floor((id.x/dimensions.y) % dimensions.z);
+    int z =  floor(id.x % dimensions.z);
+
+    DENSITIES[id.x]         = 1000;
+    REFDENSITIES[id.x]      = 1000;
+    MASSES[id.x]            = ((4*pow(PARTICLE_RADIUS,3)*PI)/(NUMBER_OF_PARTICLES*3))*DENSITIES[id.x];
+    _STATIC[id.x]           = 0;
+
+    POSITIONS[id.x]         = float3(x,y,z)*PARTICLE_RADIUS*2.0f - HALF_BOUNDSIZE;
 
 }
 
@@ -70,10 +94,10 @@ void GridUpdate(uint3 id: SV_DispatchThreadID)
 
     if(id.x >= NUMBER_OF_PARTICLES) return;
 
-    int idCell = GetCellHash(PARTICLES[id.x].position,HALF_BOUNDSIZE,SMOOTHING_RADIUS,NUMBEROFCELLS);  // Returns Hash of the current grid Cell
+    int idCell = GetCellHash(POSITIONS[id.x],HALF_BOUNDSIZE,SMOOTHING_RADIUS,NUMBEROFCELLS);  // Returns Hash of the current grid Cell
     InterlockedAdd(CELLCOUNT[idCell],1u);                                                              // Increments the count of cells in current grid cell
-    PARTICLES[id.x].hash = idCell;                                                                     // Stores current grid ID on the particle
-    PARTICLES[id.x].predictedPosition = PARTICLES[id.x].position + GRAVITY * 1/120.0f;                 // predicts future position on basis of external forces only.
+    HASHES[id.x] = idCell;                                                                     // Stores current grid ID on the particle
+    PREDICTEDPOSITIONS[id.x] = POSITIONS[id.x] + GRAVITY * 1/120.0f;                 // predicts future position on basis of external forces only.
 
    
 
@@ -114,13 +138,13 @@ void MapParticles(uint3 id: SV_DispatchThreadID)
     // Orders the particles in a "ParticleMap"- buffer, so they can be accessed by the neighborhood search
     if(id.x >= NUMBER_OF_PARTICLES) return;
     
-    int idCell = PARTICLES[id.x].hash;
+    int idCell = HASHES[id.x];
     int index = 0;
 
     InterlockedAdd(CELLTRACKER[idCell],1,index);
 
     int startIndex = CELLCOUNT[idCell] - index;   // new index of the particle in the sorted particle map
-    PARTICLES[id.x].index = startIndex;       // Store the index on the particle
+    INDICES[id.x] = startIndex;       // Store the index on the particle
 
     PARTICLEMAP[startIndex] = id.x;           // store id of the particle in the sorted array
     
@@ -139,6 +163,12 @@ void ComputeDensity(uint3 id: SV_DispatchThreadID)
     // ************ Identify indices of the neighboring 27 cells.*******************
 
             // :: Get CurrentPosition
+            float3 position = POSITIONS[id.x];
+            int3 dimensions = GetDimensions(HALF_BOUNDSIZE*2.0f,SMOOTHING_RADIUS);
+            int indices [27];
+            NeighborIndexData nIndices = GetNeighborCellIndices(position,dimensions,SMOOTHING_RADIUS,NUMBEROFCELLS).indices;
+            indices = nIndices.indices;
+            float sum = 0;   // sum of densities;
             // :: Interpolate neighbor cells
             // :: Retrieve CellIndex in that position.
 
@@ -152,6 +182,38 @@ void ComputeDensity(uint3 id: SV_DispatchThreadID)
     // ************ Access Neighbor Particles **********************************
     // Loop over the neighbor Cells and check the particles contained within them.
 
+    for(int j = 0; j<27;j++)
+    {
+        int nCell = indices[j];
+        if(nCell <0) continue;
+
+        int start = max(0,CELLCOUNT[nCell] - CELLTRACKER[nCell]);  // Find startindex in particle map
+        int lim   = min(CELLTRACKER[nCell],MAX_NEIGHBORS);         // Define when to abort the loop
+
+        float3 position = PREDICTEDPOSITIONS[id.x];
+
+        for(int i = start; i<start+lim;i++)
+        {
+            int pIDX = PARTICLEMAP[i];    // Gets the index of the particle at location i of the particle Map
+            if(_STATIC[pIDX] == 1) continue;
+
+
+            float3 dir = position - PREDICTEDPOSITIONS[pIDX];
+            float dist = sqrt(dot(dir,dir));
+            if(dist > SMOOTHING_RADIUS) continue;
+
+            sum += WPoly6Kernel(dist,SMOOTHING_RADIUS,PI);
+
+
+
+            
+        }
+    }
+
+    // Once density has been estimated. Estimate PRessure
+    DENSITIES[id.x] = sum + 0.00001f;
+    PRESSURES[id.x] = max(STIFFNESS*(DENSITIES[id.x] - REFDENSITIES[id.x]),0);
+
     // Apply Smoothing Kernel and compute density;
 
 
@@ -162,14 +224,59 @@ void ComputeDensity(uint3 id: SV_DispatchThreadID)
 [numthreads(GROUP_SIZE,1,1)]
 void ComputeForces(uint3 id: SV_DispatchThreadID)
 {
+        if(id.x > NUMBER_OF_PARTICLES) return;
+
+    float3 position = NormalizePosition(POSITIONS[id.x],HALF_BOUNDSIZE);
+    float3 pressureForce = float3(0,0,0);
+    float3 viscosityForce = float3(0,0,0);
 
    // *************** Identify indices of the neighboring 27 cells ****************
-
+   int3 dimensions = GetDimensions(HALF_BOUNDSIZE*2,SMOOTHING_RADIUS);
+   int indices[27];
+   NeighborIndexData nIndices = GetNeighborCellIndices(position,dimensions,SMOOTHING_RADIUS,NUMBEROFCELLS).indices;
+   indices = nIndices.indices;
 
    // *************** Access Neighbor Particles ***********************************
+   for(int j = 0;j<27;j++)
+   {
+
+        int nCell = indices[j];
+        if(nCell < 0) continue;
+
+        int start = max(0,CELLCOUNT[nCell] - CELLTRACKER[nCell]);  // gets start index in particleMap
+        int lim   = min(CELLTRACKER[nCell],MAX_NEIGHBORS);        // sets exit condition;
+
+        for(int i = start; i< start + lim; i++)
+        {
+            int pIDX = PARTICLEMAP[i];
+            if(_STATIC[pIDX] == 1) continue;
+
+            float3 dir  = PREDICTEDPOSITIONS[id.x] - PREDICTEDPOSITIONS[pIDX];
+            float  dist = sqrt(dot(dir,dir));
+           
+
+
+            if(dist > SMOOTHING_RADIUS) continue;
+
+            float3 dirNormalized = normalize(dir);
+            float pressureMean = (PRESSURES[id.x] + PRESSURES[pIDX])/2.0f;
+
+            pressureForce   += MASSES[pIDX]/DENSITIES[pIDX] * pressureMean + SpikeyKernelFirstDerivative(dist,SMOOTHING_RADIUS,PI);
+            viscosityForce  += (VELOCITIES[pIDX] - VELOCITIES[id.x])*ViscosityKernelLaplacian(dist,SMOOTHING_RADIUS);
+
+
+
+        }
+
+
+   }
 
 
    // ************** Do Stuff with the Particles **********************************
+   // ___ Add boundary repulsion forces here___
+
+    FORCES[id.x] = -(pressureForce/DENSITIES[id.x]) + VISCOSITY * viscosityForce;
+
 
 }
 
@@ -183,11 +290,33 @@ void ConstraintSolver(uint3 id: SV_DispatchThreadID)
 [numthreads(GROUP_SIZE,1,1)]
 void Update(uint3 id: SV_DispatchThreadID)
 {
+    if(_STATIC[id.x] == 1) return;
     // ***************** Set Up Position, Velocity, Forces **********************
+    float timestep = 0.001f;
+
+    float3 position = POSITIONS[id.x];
+    float3 velocity = VELOCITIES[id.x];
+
     // ********************** Choose Integrator *********************************
+
+    float3 pressureForce = FORCES[id.x]*timestep;
     // ***************** Integrate Position and Velocity ************************
+
+    for(int i = 0; i<10;i++)
+    {
+        SemiImplicitEuler(position,velocity,pressureForce,timestep);
+    }
     // ***************** Resolve Membrane Collisions ****************************
+
+
+    // float travelDistance    = length(position - POSITIONS[id.x]);
+    // Ray ray                 = ConstructRay(position,normalize(velocity),travelDistance);
+    // HitInfo info            = GetHitInfo();
+
+    //bool hit                = BruteForceCollisions(id,)
     // ***************** Resolve Domain Collisions ******************************
+
+     ResolveCollisions(position,velocity,POSITIONS,VELOCITIES,id.x);
     // *********************** Debug Stuff **************************************
 
 

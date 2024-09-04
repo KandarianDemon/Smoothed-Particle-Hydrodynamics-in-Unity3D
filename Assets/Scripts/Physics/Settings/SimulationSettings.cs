@@ -27,12 +27,13 @@ using Simulation;
             throw new System.Exception(" Compute Shader is Not Set on SimulationSettings!");
             
             }
-            Debug.Log("Linked");
+            
             compute.SetFloat("PARTICLE_RADIUS", particleRadius);
             compute.SetFloat("SMOOTHING_RADIUS", smoothingRadius);
             compute.SetInt("MAX_NEIGHBORS", maxNumberOfNeighbors);
             compute.SetFloat("STIFFNESS", stiffness);
             compute.SetFloat("DT", timestep);
+            Debug.Log("Linked");
         }
 
         void OnValidate()

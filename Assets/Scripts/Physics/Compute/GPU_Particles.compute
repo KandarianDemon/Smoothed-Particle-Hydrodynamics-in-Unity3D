@@ -20,6 +20,7 @@
 #include "./Include/SPH/structs.cginc"
 #include "./Include/SPH/sph_settings.cginc"
 #include "./Include/SPH/sph_buffers.cginc"
+#include "./Include/SPH/sph_gpu_buffers.cginc"
 
 //********** Collision Detection *********
 #include "./Include/CollisionDetection/collisions_detection.hlsl"
@@ -264,7 +265,6 @@ void ComputeDensity(uint3 id: SV_DispatchThreadID)
             
             float3 dir = PARTICLES[id.x].predictedPosition - PARTICLES[pIDX].predictedPosition;
 
-            if(dot(dir,dir) > pow(SMOOTHING_RADIUS,1)) continue;
 
             float dist = sqrt(dot(dir,dir));
 

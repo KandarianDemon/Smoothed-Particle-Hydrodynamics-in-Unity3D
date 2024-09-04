@@ -3,6 +3,7 @@
 
 #include "./Include/Math/geometry.hlsl"
 
+
 // This file contains code for common geometrical intersection tests. Most of these are required for Collision test in the fluid physics.
 // All the code is taken from Christer Ericsons "Real-Time-Collision-Detection";
 
@@ -68,11 +69,30 @@ float SqDistanceToLineSegment(float3 a, float3 b, float3 c)
 
 // Additional Tests
 
+
+
 bool IsPointInsideTriangle(float3 p, Triangle tri)
 {
-    float3 a = PARTICLES[tri.a].position - p;   //Get positions and transform to origin.
-    float3 b = PARTICLES[tri.b].position - p;
-    float3 c = PARTICLES[tri.c].position - p;
+
+    // REWORK THIS. Currently it is fitted to the Particles-Struct. Make it more flexible.
+    // PAss array of points instead of the Tri. But passing a tri is very convenient. Requires a very general
+    // definition tho.
+
+    #ifdef USE_SOA
+
+        float3 a = POSITIONS[tri.a] - p;   //Get positions and transform to origin.
+        float3 b = POSITIONS[tri.b] - p;
+        float3 c = POSITIONS[tri.c] - p;
+
+
+
+    #else
+        float3 a = PARTICLES[tri.a].position - p;   //Get positions and transform to origin.
+        float3 b = PARTICLES[tri.b].position - p;
+        float3 c = PARTICLES[tri.c].position - p;
+    
+       
+    #endif
 
     float3 u = cross(b,c);
     float3 v = cross(c,a);

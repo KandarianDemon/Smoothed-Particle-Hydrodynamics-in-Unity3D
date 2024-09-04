@@ -168,6 +168,81 @@ void ResolveCollisions(float3 position, float3 velocity,uint particleIndex)
 
 }
 
+void ResolveCollisions(float3 position, float3 velocity,RWStructuredBuffer<float3> POSITIONS, RWStructuredBuffer<float3> VELOCITIES, int index)
+{
+	// Transform position/velocity to the local space of the bounding box (scale not included)
+	float3 posLocal = mul(worldToLocal, float4(position, 1)).xyz;
+	float3 velocityLocal = mul(worldToLocal, float4(velocity, 0)).xyz;
+
+	// Calculate distance from box on each axis (negative values are inside box)
+	float3 halfSize = HALF_BOUNDSIZE/length(HALF_BOUNDSIZE);
+    halfSize = mul(worldToLocal,float4(halfSize,1)).xyz;
+
+	const float3 edgeDst = (HALF_BOUNDSIZE - PARTICLE_RADIUS) - abs(position);
+    //const float3 edgeDst = halfSize - abs(posLocal);
+
+    float collisionDamping = 0.15f;
+    float mass = ((4*pow(PARTICLE_RADIUS,3)*pi)/(NUMBER_OF_PARTICLES*3))*1000;
+
+	// Resolve collisions
+	if (edgeDst.x <= 0)
+	{
+		position.x = HALF_BOUNDSIZE.x * sign(position.x) + sign(position.x)*-1*PARTICLE_RADIUS ;
+        
+		velocity.x *= -1 * collisionDamping;
+
+       
+
+        
+
+       
+	}
+	if (edgeDst.y <= 0)
+	{
+		position.y = HALF_BOUNDSIZE.y * sign(position.y) + sign(position.y)*-1*PARTICLE_RADIUS;
+		velocity.y *= -1 * collisionDamping;
+
+      
+
+
+       
+	}
+	if (edgeDst.z <= 0)
+	{
+
+      
+		position.z = HALF_BOUNDSIZE.z * sign(position.z) + sign(position.z)*-1*PARTICLE_RADIUS;
+		velocity.z *= -1 *collisionDamping;
+
+         
+
+	}
+    
+   
+
+  
+
+    // if(IsWallHit(edgeDst))
+    // {
+    //     PARTICLES[particleIndex].color = float3(0,1,0);
+
+    //     // Loop over virtual Particles for density estimation;
+
+
+    // }
+    // else{
+    //     PARTICLES[particleIndex].color = float3(0,0,0);
+    // }
+
+    
+
+	// Transform resolved position/velocity back to world space
+	POSITIONS[index]    =  position;
+	VELOCITIES[index]   =  velocity;
+
+}
+
+
 
 float LennardJonesPotential(float r, float epsilon, float sigma) {
     float sr = r / sigma;
@@ -786,6 +861,38 @@ bool BruteForceCollisions(uint3 id, RWStructuredBuffer<Particle> PARTICLES, floa
     {
         Triangle tri    = TRIANGLES[i];
         Ray ray         = ConstructRay(PARTICLES[id.x].position,normalize(velocity),length(velocity)*timestep);
+        Plane plane     = ConstructPlane(PARTICLES[tri.a].position, tri.normal);
+
+        double t        = DistPointPlane(ray.origin,plane);
+        float3 hitPoint = ray.origin - t*tri.normal;
+
+        if(t <= PARTICLE_RADIUS && IsPointInsideTriangle(ray.origin,tri)) 
+        
+        
+        {
+            
+            info.isHit      = true;
+            info.distance   = t;
+            info.hitPoint   = hitPoint;
+            info.normal     = tri.normal;
+            return true;
+
+        }
+
+
+
+    }
+
+    return false;
+}
+
+bool BruteForceCollisions(uint3 id, float3 particlePosition, float3 velocity, float3 position,float timestep, in out HitInfo info)
+{
+
+    for(int i = 0; i<TRIANGLES.Length;i++)
+    {
+        Triangle tri    = TRIANGLES[i];
+        Ray ray         = ConstructRay(particlePosition,normalize(velocity),length(velocity)*timestep);
         Plane plane     = ConstructPlane(PARTICLES[tri.a].position, tri.normal);
 
         double t        = DistPointPlane(ray.origin,plane);
